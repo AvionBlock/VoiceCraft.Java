@@ -12,7 +12,7 @@ import java.util.OptionalInt;
 import org.bukkit.entity.Player;
 
 import team.avion.adapter.VoiceCraftAudioBridge;
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import team.avion.proxy.ProxyPlayerSnapshot;
 import team.avion.protocol.McApiTcpClient;
 import team.avion.protocol.McPackets.AcceptResponsePacket;
@@ -45,7 +45,7 @@ import team.avion.protocol.McProtocolTypes.Vector3;
 public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridge {
     private static final int EFFECT_BITMASK_PROXIMITY = 1;
 
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final McApiTcpClient client;
     private final SecureRandom random = new SecureRandom();
 
@@ -60,7 +60,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private boolean proximityToggle = true;
     private boolean voiceEffects = true;
 
-    public PaperVoiceCraftSessionManager(GeyserVoice plugin) {
+    public PaperVoiceCraftSessionManager(VoiceCraftJava plugin) {
         this.plugin = plugin;
         this.client = new McApiTcpClient(plugin.Logger);
     }

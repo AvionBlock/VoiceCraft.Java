@@ -6,7 +6,7 @@ import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.plugin.Command;
 import net.md_5.bungee.api.plugin.TabExecutor;
-import team.avion.bungeecord.GeyserVoice;
+import team.avion.bungeecord.VoiceCraftJava;
 import team.avion.bungeecord.utils.Language;
 import team.avion.common.commands.BaseVoiceCommand;
 import team.avion.common.utils.DoubleStringOperation;
@@ -15,10 +15,10 @@ import team.avion.common.utils.StringOperation;
 
 public class VoiceCommand extends Command implements TabExecutor {
     private final BaseVoiceCommand voiceCommand;
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
 
-    public VoiceCommand(GeyserVoice plugin, String lang) {
+    public VoiceCommand(VoiceCraftJava plugin, String lang) {
         super("voice");
         this.voiceCommand = new BaseVoiceCommand(plugin);
         this.plugin = plugin;

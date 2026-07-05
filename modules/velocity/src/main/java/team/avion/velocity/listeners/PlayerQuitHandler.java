@@ -6,14 +6,14 @@ import com.velocitypowered.api.proxy.Player;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 import team.avion.velocity.utils.Language;
 
 public class PlayerQuitHandler {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
 
-    public PlayerQuitHandler(GeyserVoice plugin, String lang) {
+    public PlayerQuitHandler(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
         this.lang = lang;
     }
@@ -35,7 +35,7 @@ public class PlayerQuitHandler {
 
         if (isDisconnected) {
             plugin.Logger.info(disconnectMessage);
-            if (GeyserVoice.getConfig().getBoolean("config.voice.send-disconnect-message", true)) {
+            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-disconnect-message", true)) {
                 plugin.getProxy().sendMessage(Component.text(disconnectMessage).color(NamedTextColor.YELLOW));
             }
         } else {

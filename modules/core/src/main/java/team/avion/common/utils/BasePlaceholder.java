@@ -10,7 +10,7 @@ public class BasePlaceholder extends PlaceholderExpansion {
 
     @Override
     public String getAuthor() {
-        return "GeyserVoice";
+        return "VoiceCraft.Java";
     }
 
     @Override

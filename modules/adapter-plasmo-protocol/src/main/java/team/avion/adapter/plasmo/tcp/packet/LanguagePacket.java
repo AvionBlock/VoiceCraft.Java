@@ -22,7 +22,7 @@ public final class LanguagePacket implements PlasmoPacket {
 
     @Override
     public void read(DataInput input) throws IOException {
-        throw new UnsupportedOperationException("LanguagePacket decoding is not used by GeyserVoice");
+        throw new UnsupportedOperationException("LanguagePacket decoding is not used by VoiceCraft.Java");
     }
 
     @Override

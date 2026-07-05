@@ -11,7 +11,7 @@ import org.bukkit.entity.Player;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import team.avion.paper.utils.Language;
 import team.avion.common.commands.BaseVoiceCommand;
 import team.avion.common.utils.IntegerOperation;
@@ -21,11 +21,11 @@ import team.avion.common.utils.DoubleStringOperation;
 public class VoiceCommand implements CommandExecutor, TabCompleter {
     
     private final BaseVoiceCommand voiceCommand;
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
 
     // Get the plugin and lang interfaces.
-    public VoiceCommand(GeyserVoice plugin, String lang) {
+    public VoiceCommand(VoiceCraftJava plugin, String lang) {
         this.voiceCommand = new BaseVoiceCommand(plugin);
         this.plugin = plugin;
         this.lang = lang;

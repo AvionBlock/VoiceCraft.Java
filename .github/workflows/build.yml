@@ -45,6 +45,6 @@ jobs:
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: geyservoice-build
+          name: voicecraft-java-build
           path: dist/*.jar
           if-no-files-found: error

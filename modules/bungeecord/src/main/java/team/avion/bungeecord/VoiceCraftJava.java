@@ -27,12 +27,12 @@ import team.avion.bungeecord.listeners.PluginMessageHandler;
 import team.avion.bungeecord.tasks.PositionsTask;
 import team.avion.bungeecord.utils.BungeecordLogger;
 import team.avion.bungeecord.utils.Language;
-import team.avion.common.BaseGeyserVoice;
+import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.proxy.VoiceCraftProxySessionManager;
 
-public class GeyserVoice extends Plugin implements BaseGeyserVoice {
+public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -41,7 +41,7 @@ public class GeyserVoice extends Plugin implements BaseGeyserVoice {
     private static final String LEGACY_LOGIN_TOKEN_PATH = "config.voicecraft.login-token";
 
     private static @Getter Configuration config;
-    private static @Getter GeyserVoice instance;
+    private static @Getter VoiceCraftJava instance;
 
     private @Getter boolean isConnected = false;
     private @Getter String host = "";
@@ -57,7 +57,7 @@ public class GeyserVoice extends Plugin implements BaseGeyserVoice {
 
     public final BungeecordLogger Logger = new BungeecordLogger();
 
-    public GeyserVoice() {
+    public VoiceCraftJava() {
         this.sessionManager = new VoiceCraftProxySessionManager(Logger);
     }
 

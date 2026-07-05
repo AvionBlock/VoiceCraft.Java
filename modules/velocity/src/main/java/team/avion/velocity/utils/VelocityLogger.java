@@ -6,7 +6,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import team.avion.common.utils.BaseLogger;
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 
 public class VelocityLogger extends BaseLogger {
     @Override
@@ -31,18 +31,18 @@ public class VelocityLogger extends BaseLogger {
 
     @Override
     public void debug(String msg) {
-        if (GeyserVoice.getConfig().getBoolean("config.debug", false)) {
+        if (VoiceCraftJava.getConfig().getBoolean("config.debug", false)) {
             console().sendMessage(prefix().append(Component.text(msg).color(NamedTextColor.BLUE).decorate(TextDecoration.BOLD)));
         }
     }
 
     private ConsoleCommandSource console() {
-        return GeyserVoice.getInstance().getProxy().getConsoleCommandSource();
+        return VoiceCraftJava.getInstance().getProxy().getConsoleCommandSource();
     }
 
     private Component prefix() {
         return Component.text("[").color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD)
-                .append(Component.text("GeyserVoice").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD))
+                .append(Component.text("VoiceCraft.Java").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD))
                 .append(Component.text("] ").color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD));
     }
 }

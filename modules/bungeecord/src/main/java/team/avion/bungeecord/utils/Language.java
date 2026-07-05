@@ -9,7 +9,7 @@ import net.md_5.bungee.config.Configuration;
 import net.md_5.bungee.config.ConfigurationProvider;
 import net.md_5.bungee.config.YamlConfiguration;
 import team.avion.common.localization.PluginLocalization;
-import team.avion.bungeecord.GeyserVoice;
+import team.avion.bungeecord.VoiceCraftJava;
 
 public final class Language {
     private static final Map<String, Configuration> languageConfigs = new HashMap<>();
@@ -18,7 +18,7 @@ public final class Language {
     private Language() {
     }
 
-    public static void init(GeyserVoice plugin) {
+    public static void init(VoiceCraftJava plugin) {
         File languageFolder = new File(plugin.getDataFolder(), "locale");
         languageFolder.mkdirs();
         plugin.saveResource("locale/en.yml");

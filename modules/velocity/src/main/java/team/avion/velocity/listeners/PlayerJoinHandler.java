@@ -3,12 +3,12 @@ package team.avion.velocity.listeners;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 
 public class PlayerJoinHandler {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
-    public PlayerJoinHandler(GeyserVoice plugin, String lang) {
+    public PlayerJoinHandler(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
     }
 

@@ -1,4 +1,4 @@
-rootProject.name = 'GeyserVoice'
+rootProject.name = 'VoiceCraft.Java'
 include 'core'
 include 'adapter-api'
 include 'adapter-plasmo-protocol'

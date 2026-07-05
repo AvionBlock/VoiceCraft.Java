@@ -3,7 +3,7 @@ package team.avion.paper.utils;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import team.avion.common.localization.PluginLocalization;
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 
 import java.io.File;
 import java.util.HashMap;
@@ -13,7 +13,7 @@ public class Language {
     private static final Map<String, YamlConfiguration> languageConfigs = new HashMap<>();
     private static final String defaultLanguage = PluginLocalization.DEFAULT_LANGUAGE;
 
-    public static void init(GeyserVoice plugin) {
+    public static void init(VoiceCraftJava plugin) {
         File languageFolder = new File(plugin.getDataFolder(), "locale");
         languageFolder.mkdirs();
         plugin.saveResource("locale/en.yml");

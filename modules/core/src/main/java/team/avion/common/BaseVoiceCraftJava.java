@@ -4,7 +4,7 @@ package team.avion.common;
 import java.util.Map;
 import java.util.HashMap;
 
-public interface BaseGeyserVoice {
+public interface BaseVoiceCraftJava {
     public boolean isConnected = false;
     public String host = "";
     public int port = 0;

@@ -28,7 +28,7 @@ import team.avion.adapter.plasmo.udp.PlasmoUdpCodec;
 import team.avion.adapter.plasmo.udp.PlasmoUdpCodecs;
 import team.avion.adapter.plasmo.udp.PlasmoUdpEnvelope;
 import team.avion.adapter.plasmo.udp.packet.PingPacket;
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -45,7 +45,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
     private static final long KEEP_ALIVE_INTERVAL_MS = 1000L;
     private static final long KEEP_ALIVE_TIMEOUT_MS = 30000L;
 
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final PlasmoTcpCodec tcpCodec = PlasmoTcpCodecs.createBaseCodec();
     private final PlasmoUdpCodec udpCodec = PlasmoUdpCodecs.createBaseCodec();
     private final UUID serverId = UUID.randomUUID();
@@ -61,7 +61,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
     private int proximityDistance;
     private boolean debug;
 
-    public PaperPlasmoVoiceAdapter(GeyserVoice plugin) {
+    public PaperPlasmoVoiceAdapter(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 
@@ -97,7 +97,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
         udpSocket = new DatagramSocket(new InetSocketAddress(bindHost, udpPort));
         udpSocket.setSoTimeout(1000);
         running.set(true);
-        udpThread = new Thread(this::runUdpLoop, "GeyserVoice-Plasmo-UDP");
+        udpThread = new Thread(this::runUdpLoop, "VoiceCraft.Java-Plasmo-UDP");
         udpThread.setDaemon(true);
         udpThread.start();
 

@@ -29,7 +29,7 @@ import lombok.Getter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import team.avion.common.BaseGeyserVoice;
+import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.proxy.VoiceCraftProxySessionManager;
@@ -42,8 +42,8 @@ import team.avion.velocity.tasks.PositionsTask;
 import team.avion.velocity.utils.Language;
 import team.avion.velocity.utils.VelocityLogger;
 
-@Plugin(id = "geyservoice", name = "GeyserVoice", version = "0.0.0", description = "VoiceCraft bridge for Velocity", authors = { "0xAlpha" })
-public class GeyserVoice implements BaseGeyserVoice {
+@Plugin(id = "voicecraft-java", name = "VoiceCraft.Java", version = "0.0.0", description = "VoiceCraft bridge for Velocity", authors = { "0xAlpha" })
+public class VoiceCraftJava implements BaseVoiceCraftJava {
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -55,7 +55,7 @@ public class GeyserVoice implements BaseGeyserVoice {
     private final @Getter File dataFolder;
     private static VelocityYamlConfig config;
 
-    private static @Getter GeyserVoice instance;
+    private static @Getter VoiceCraftJava instance;
     private @Getter boolean isConnected = false;
     private @Getter String host = "";
     private @Getter int port = 0;
@@ -72,7 +72,7 @@ public class GeyserVoice implements BaseGeyserVoice {
     public final VelocityLogger Logger = new VelocityLogger();
 
     @Inject
-    public GeyserVoice(ProxyServer proxy, @DataDirectory Path dataDirectory) throws IOException {
+    public VoiceCraftJava(ProxyServer proxy, @DataDirectory Path dataDirectory) throws IOException {
         instance = this;
         this.proxy = proxy;
         this.dataFolder = dataDirectory.toFile();

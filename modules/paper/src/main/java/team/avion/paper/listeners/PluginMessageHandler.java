@@ -5,14 +5,14 @@ import java.util.Objects;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import team.avion.proxy.ProxyMessageCodec;
 import team.avion.proxy.ProxyPlayerSnapshot;
 
 public class PluginMessageHandler implements PluginMessageListener {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
-    public PluginMessageHandler(GeyserVoice plugin) {
+    public PluginMessageHandler(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 

@@ -3,7 +3,7 @@ package team.avion.bungeecord.utils;
 import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.chat.ComponentBuilder;
-import team.avion.bungeecord.GeyserVoice;
+import team.avion.bungeecord.VoiceCraftJava;
 import team.avion.common.utils.BaseLogger;
 
 public class BungeecordLogger extends BaseLogger {
@@ -24,18 +24,18 @@ public class BungeecordLogger extends BaseLogger {
 
     @Override
     public void debug(String msg) {
-        if (GeyserVoice.getConfig().getBoolean("config.debug", false)) {
+        if (VoiceCraftJava.getConfig().getBoolean("config.debug", false)) {
             console().sendMessage(prefix().append(msg).color(ChatColor.BLUE).bold(true).create());
         }
     }
 
     private CommandSender console() {
-        return GeyserVoice.getInstance().getProxy().getConsole();
+        return VoiceCraftJava.getInstance().getProxy().getConsole();
     }
 
     private ComponentBuilder prefix() {
         return new ComponentBuilder("[").color(ChatColor.WHITE).bold(true)
-                .append("GeyserVoice").color(ChatColor.LIGHT_PURPLE).bold(true)
+                .append("VoiceCraft.Java").color(ChatColor.LIGHT_PURPLE).bold(true)
                 .append("] ").color(ChatColor.WHITE).bold(true);
     }
 }

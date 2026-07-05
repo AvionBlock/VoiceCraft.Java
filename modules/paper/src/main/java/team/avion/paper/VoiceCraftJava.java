@@ -10,7 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import team.avion.common.BaseGeyserVoice;
+import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.adapter.AdapterContext;
@@ -32,9 +32,9 @@ import java.util.Map;
 import java.util.HashMap;
 
 /**
- * Main plugin class for GeyserVoice.
+ * Main plugin class for VoiceCraft.Java.
  */
-public class GeyserVoice extends JavaPlugin implements BaseGeyserVoice {
+public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -43,7 +43,7 @@ public class GeyserVoice extends JavaPlugin implements BaseGeyserVoice {
     private static final String LEGACY_LOGIN_TOKEN_PATH = "config.voicecraft.login-token";
     private static final String MANAGED_VOICE_PORT_PATH = "config.voicecraft.voice.port";
 
-    private static @Getter GeyserVoice instance;
+    private static @Getter VoiceCraftJava instance;
     private @Getter boolean isConnected = false;
     private @Getter String host = "";
     private @Getter int port = 0;

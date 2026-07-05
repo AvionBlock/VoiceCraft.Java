@@ -11,14 +11,14 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 
 import team.avion.proxy.ProxyMessageCodec;
 import team.avion.proxy.ProxyPlayerSnapshot;
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 
 public class PluginMessageHandler {
     public static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from(ProxyMessageCodec.CHANNEL_NAME);
 
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
-    public PluginMessageHandler(GeyserVoice plugin) {
+    public PluginMessageHandler(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 

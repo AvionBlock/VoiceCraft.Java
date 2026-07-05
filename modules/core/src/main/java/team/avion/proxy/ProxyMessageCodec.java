@@ -6,7 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 public final class ProxyMessageCodec {
-    public static final String CHANNEL_NAME = "geyservoice:main";
+    public static final String CHANNEL_NAME = "voicecraft-java:main";
 
     public static final String SNAPSHOT = "PlayerSnapshot";
     public static final String BIND_REQUEST = "BindRequest";

@@ -6,16 +6,16 @@ import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.event.PluginMessageEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
-import team.avion.bungeecord.GeyserVoice;
+import team.avion.bungeecord.VoiceCraftJava;
 import team.avion.proxy.ProxyMessageCodec;
 import team.avion.proxy.ProxyPlayerSnapshot;
 
 public class PluginMessageHandler implements Listener {
     public static final String CHANNEL = ProxyMessageCodec.CHANNEL_NAME;
 
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
-    public PluginMessageHandler(GeyserVoice plugin) {
+    public PluginMessageHandler(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 

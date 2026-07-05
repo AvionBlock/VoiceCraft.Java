@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain your problem.
 **Server (please complete the following information):**
  - Plugin loader: [e.g. Paper]
  - VoiceCraft server version [e.g. 1.4.0.2]
- - GeyserVoice version [e.g. 1.7.0]
+ - VoiceCraft.Java version [e.g. 1.7.0]
 
 **Additional context**
 Add any other context about the problem here.

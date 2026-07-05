@@ -7,18 +7,19 @@ version = project.hasProperty('VERSION') ? project.VERSION : '0.1.0-SNAPSHOT'
 description = 'Plugin that adds support for using VoiceCraft on Java servers.'
 
 ext {
-    pluginName = 'GeyserVoice'
-    pluginUrl = 'https://geyservoice.avion.team'
+    pluginName = 'VoiceCraft.Java'
+    pluginUrl = 'https://java.voicecraft.chat'
     pluginAuthor = 'lil-jon-crunk'
     javaTarget = JavaVersion.VERSION_21
     voiceCraft = [
-        githubRepository   : 'AvionBlock/VoiceCraft',
+        gitlabBaseUrl      : 'https://gitlab.avion.team',
+        gitlabProjectPath  : 'voicecraft/VoiceCraft',
         release            : 'latest',
         installDirectory   : 'voicecraft-runtime',
         executableBaseName : 'VoiceCraft.Server',
         protocolMajor      : 1,
-        protocolMinor      : 6,
-        protocolPatch      : 0
+        protocolMinor      : 7,
+        protocolPatch      : 1
     ]
 }
 

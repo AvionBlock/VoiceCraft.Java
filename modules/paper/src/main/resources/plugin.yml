@@ -1,15 +1,15 @@
-﻿name: GeyserVoice
+name: VoiceCraft.Java
 
 version: 0.1.0-SNAPSHOT
 
-main: team.avion.paper.GeyserVoice
+main: team.avion.paper.VoiceCraftJava
 description: Plugin that adds support for using VoiceCraft on Java servers.
 
 author: lil-jon-crunk
-website: https://geyservoice.avion.team
+website: https://java.voicecraft.chat
 
 api-version: "1.21.11"
-prefix: GeyserVoice
+prefix: VoiceCraft.Java
 
 softdepend:
   - PlaceholderAPI

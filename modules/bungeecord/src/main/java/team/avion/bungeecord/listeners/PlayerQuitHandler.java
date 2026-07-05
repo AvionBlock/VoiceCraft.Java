@@ -6,14 +6,14 @@ import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
-import team.avion.bungeecord.GeyserVoice;
+import team.avion.bungeecord.VoiceCraftJava;
 import team.avion.bungeecord.utils.Language;
 
 public class PlayerQuitHandler implements Listener {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
 
-    public PlayerQuitHandler(GeyserVoice plugin, String lang) {
+    public PlayerQuitHandler(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
         this.lang = lang;
     }
@@ -35,7 +35,7 @@ public class PlayerQuitHandler implements Listener {
 
         if (isDisconnected) {
             plugin.Logger.info(disconnectMessage);
-            if (GeyserVoice.getConfig().getBoolean("config.voice.send-disconnect-message", true)) {
+            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-disconnect-message", true)) {
                 plugin.getProxy().broadcast(new ComponentBuilder(disconnectMessage).color(ChatColor.YELLOW).create());
             }
         } else {

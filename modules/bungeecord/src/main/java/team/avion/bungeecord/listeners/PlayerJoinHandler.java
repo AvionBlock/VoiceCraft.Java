@@ -3,12 +3,12 @@ package team.avion.bungeecord.listeners;
 import net.md_5.bungee.api.event.ServerConnectedEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
-import team.avion.bungeecord.GeyserVoice;
+import team.avion.bungeecord.VoiceCraftJava;
 
 public class PlayerJoinHandler implements Listener {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
-    public PlayerJoinHandler(GeyserVoice plugin, String lang) {
+    public PlayerJoinHandler(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
     }
 

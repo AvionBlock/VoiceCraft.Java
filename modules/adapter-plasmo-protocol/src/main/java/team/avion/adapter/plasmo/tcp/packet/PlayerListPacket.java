@@ -9,7 +9,7 @@ import java.io.IOException;
 public final class PlayerListPacket implements PlasmoPacket {
     @Override
     public void read(DataInput input) throws IOException {
-        throw new UnsupportedOperationException("PlayerListPacket decoding is not used by GeyserVoice");
+        throw new UnsupportedOperationException("PlayerListPacket decoding is not used by VoiceCraft.Java");
     }
 
     @Override

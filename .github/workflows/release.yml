@@ -56,7 +56,7 @@ jobs:
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: geyservoice-release
+          name: voicecraft-java-release
           path: release-artifacts/*.jar
           if-no-files-found: error
 
@@ -75,7 +75,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: geyservoice-release
+          name: voicecraft-java-release
           path: release-artifacts
 
       - name: Create release
@@ -106,7 +106,7 @@ jobs:
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         with:
-          name: GeyserVoice ${{ github.event.inputs.tag }}
+          name: VoiceCraft.Java ${{ github.event.inputs.tag }}
           project_id: WtPu56Wa
           loaders: paper, purpur, velocity, bungeecord
           game_versions: 1.21.11:26.1

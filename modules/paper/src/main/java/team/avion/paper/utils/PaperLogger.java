@@ -4,7 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.ConsoleCommandSender;
 
 import team.avion.common.utils.BaseLogger;
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -16,7 +16,7 @@ public class PaperLogger extends BaseLogger {
         Component coloredLogo = Component.text("[")
                 .color(NamedTextColor.WHITE)
                 .decorate(TextDecoration.BOLD)
-                .append(Component.text("GeyserVoice")
+                .append(Component.text("VoiceCraft.Java")
                         .color(NamedTextColor.LIGHT_PURPLE)
                         .decorate(TextDecoration.BOLD))
                 .append(Component.text("] ")
@@ -32,7 +32,7 @@ public class PaperLogger extends BaseLogger {
         Component coloredLogo = Component.text("[")
                 .color(NamedTextColor.WHITE)
                 .decorate(TextDecoration.BOLD)
-                .append(Component.text("GeyserVoice")
+                .append(Component.text("VoiceCraft.Java")
                         .color(NamedTextColor.LIGHT_PURPLE)
                         .decorate(TextDecoration.BOLD))
                 .append(Component.text("] ")
@@ -48,7 +48,7 @@ public class PaperLogger extends BaseLogger {
         Component coloredLogo = Component.text("[")
                 .color(NamedTextColor.WHITE)
                 .decorate(TextDecoration.BOLD)
-                .append(Component.text("GeyserVoice")
+                .append(Component.text("VoiceCraft.Java")
                         .color(NamedTextColor.LIGHT_PURPLE)
                         .decorate(TextDecoration.BOLD))
                 .append(Component.text("] ")
@@ -64,7 +64,7 @@ public class PaperLogger extends BaseLogger {
         Component coloredLogo = Component.text("[")
                 .color(NamedTextColor.WHITE)
                 .decorate(TextDecoration.BOLD)
-                .append(Component.text("GeyserVoice")
+                .append(Component.text("VoiceCraft.Java")
                         .color(NamedTextColor.LIGHT_PURPLE)
                         .decorate(TextDecoration.BOLD))
                 .append(Component.text("] ")
@@ -77,12 +77,12 @@ public class PaperLogger extends BaseLogger {
 
     public void debug(String msg) {
         ConsoleCommandSender console = Bukkit.getServer().getConsoleSender();
-        Boolean isDebug = GeyserVoice.getInstance().getConfig().getBoolean("config.debug");
+        Boolean isDebug = VoiceCraftJava.getInstance().getConfig().getBoolean("config.debug");
         if (isDebug) {
             Component coloredLogo = Component.text("[")
                     .color(NamedTextColor.WHITE)
                     .decorate(TextDecoration.BOLD)
-                    .append(Component.text("GeyserVoice")
+                    .append(Component.text("VoiceCraft.Java")
                             .color(NamedTextColor.LIGHT_PURPLE)
                             .decorate(TextDecoration.BOLD))
                     .append(Component.text("] ")

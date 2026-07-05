@@ -3,13 +3,13 @@ package team.avion.paper.utils;
 import org.bukkit.entity.Player;
 
 import team.avion.common.utils.BasePlaceholder;
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 
 public class Placeholder extends BasePlaceholder {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
     // Get the plugin interface.
-    public Placeholder(GeyserVoice plugin) {
+    public Placeholder(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 

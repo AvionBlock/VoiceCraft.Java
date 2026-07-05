@@ -5,16 +5,16 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.lang.NumberFormatException;
 
-import team.avion.common.BaseGeyserVoice;
+import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.utils.IntegerOperation;
 import team.avion.common.utils.StringOperation;
 import team.avion.common.utils.DoubleStringOperation;
 
 public class BaseVoiceCommand {
-    private final BaseGeyserVoice plugin;
+    private final BaseVoiceCraftJava plugin;
 
     // Get the plugin and lang interfaces.
-    public <T extends BaseGeyserVoice> BaseVoiceCommand(T plugin) {
+    public <T extends BaseVoiceCraftJava> BaseVoiceCommand(T plugin) {
         this.plugin = plugin;
     }
 

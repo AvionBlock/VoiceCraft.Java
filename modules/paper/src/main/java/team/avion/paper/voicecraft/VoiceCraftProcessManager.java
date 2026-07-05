@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -24,18 +25,18 @@ import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import team.avion.protocol.VoiceCraftProtocol;
 import team.avion.protocol.VoiceCraftRuntimeDefaults;
 
 public class VoiceCraftProcessManager {
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
 
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
 
     private Process process;
 
-    public VoiceCraftProcessManager(GeyserVoice plugin) {
+    public VoiceCraftProcessManager(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 
@@ -221,8 +222,9 @@ public class VoiceCraftProcessManager {
         String platform = defaultPlatform();
         String architecture = defaultArchitecture();
         String assetName = resolveAssetName(platform, architecture);
-        String releaseId = VoiceCraftRuntimeDefaults.RELEASE + "|" + VoiceCraftProtocol.VERSION_STRING + "|" + assetName;
-        Path releaseMarker = installDirectory.resolve(".geyservoice-release");
+        String releaseId = VoiceCraftRuntimeDefaults.GITLAB_BASE_URL + "|" + VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH
+                + "|" + VoiceCraftRuntimeDefaults.RELEASE + "|" + VoiceCraftProtocol.VERSION_STRING + "|" + assetName;
+        Path releaseMarker = installDirectory.resolve(".voicecraft-java-release");
         Path executablePath = resolveManagedExecutable(installDirectory, platform);
 
         if (!Files.exists(executablePath) || !releaseId.equals(readReleaseMarker(releaseMarker))) {
@@ -291,7 +293,8 @@ public class VoiceCraftProcessManager {
     }
 
     private void downloadAndExtractRelease(Path installDirectory, String assetName) throws IOException, InterruptedException {
-        String downloadUrl = buildReleaseUrl(VoiceCraftRuntimeDefaults.GITHUB_REPOSITORY,
+        String downloadUrl = buildReleaseUrl(VoiceCraftRuntimeDefaults.GITLAB_BASE_URL,
+                VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH,
                 VoiceCraftRuntimeDefaults.RELEASE, assetName);
 
         plugin.Logger.info("Downloading VoiceCraft release asset " + assetName + "...");
@@ -324,9 +327,17 @@ public class VoiceCraftProcessManager {
         }
     }
 
-    private static String buildReleaseUrl(String repo, String release, String assetName) {
-        String releasePath = "latest".equalsIgnoreCase(release) ? "latest/download/" : "download/" + release + "/";
-        return "https://github.com/" + repo + "/releases/" + releasePath + assetName;
+    private static String buildReleaseUrl(String baseUrl, String projectPath, String release, String assetName) {
+        String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        String releasePath = "latest".equalsIgnoreCase(release)
+                ? "permalink/latest"
+                : encodePathSegment(release);
+        return normalizedBaseUrl + "/" + projectPath + "/-/releases/" + releasePath
+                + "/downloads/" + encodePathSegment(assetName);
+    }
+
+    private static String encodePathSegment(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private static void deleteDirectoryContents(Path directory) throws IOException {

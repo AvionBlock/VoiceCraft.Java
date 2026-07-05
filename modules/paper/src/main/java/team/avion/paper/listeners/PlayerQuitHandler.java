@@ -5,17 +5,17 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import team.avion.paper.utils.Language;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 public class PlayerQuitHandler implements Listener {
 
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
 
-    public PlayerQuitHandler(GeyserVoice plugin, String lang) {
+    public PlayerQuitHandler(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
         this.lang = lang;
     }

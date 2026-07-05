@@ -2,16 +2,16 @@ package team.avion.velocity.tasks;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 import team.avion.velocity.utils.Language;
 
 public class PositionsTask {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
     private int reconnectRetries = 0;
     private boolean reconnecting = false;
 
-    public PositionsTask(GeyserVoice plugin, String lang) {
+    public PositionsTask(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
         this.lang = lang;
     }
@@ -32,8 +32,8 @@ public class PositionsTask {
         plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-lost"));
         plugin.setNotConnected();
 
-        if (GeyserVoice.getConfig().getBoolean("config.auto-reconnect", true)) {
-            if (GeyserVoice.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
+        if (VoiceCraftJava.getConfig().getBoolean("config.auto-reconnect", true)) {
+            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
                 plugin.getProxy().sendMessage(Component.text(Language.getMessage(lang, "plugin-connection-lost-reconnect")).color(NamedTextColor.RED));
             }
             reconnectRetries = 0;
@@ -41,7 +41,7 @@ public class PositionsTask {
             return reconnect();
         }
 
-        if (GeyserVoice.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
+        if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
             plugin.getProxy().sendMessage(Component.text(Language.getMessage(lang, "plugin-connection-lost")).color(NamedTextColor.RED));
         }
         return false;
@@ -51,7 +51,7 @@ public class PositionsTask {
         if (reconnectRetries >= 5) {
             reconnecting = false;
             plugin.Logger.error(Language.getMessage(lang, "plugin-connection-reconnecting-failed"));
-            if (GeyserVoice.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
+            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
                 plugin.getProxy().sendMessage(Component.text(Language.getMessage(lang, "plugin-connection-reconnecting-failed")).color(NamedTextColor.RED));
             }
             return false;
@@ -63,7 +63,7 @@ public class PositionsTask {
         if (plugin.reconnect(true)) {
             reconnecting = false;
             plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-success"));
-            if (GeyserVoice.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
+            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-connection-lost-message", true)) {
                 plugin.getProxy().sendMessage(Component.text(Language.getMessage(lang, "plugin-connection-reconnecting-success")).color(NamedTextColor.GREEN));
             }
             return true;

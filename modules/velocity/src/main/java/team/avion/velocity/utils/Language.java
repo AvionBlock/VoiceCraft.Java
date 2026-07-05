@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import team.avion.common.localization.PluginLocalization;
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 import team.avion.velocity.config.VelocityYamlConfig;
 
 public final class Language {
@@ -16,7 +16,7 @@ public final class Language {
     private Language() {
     }
 
-    public static void init(GeyserVoice plugin) {
+    public static void init(VoiceCraftJava plugin) {
         File languageFolder = new File(plugin.getDataFolder(), "locale");
         languageFolder.mkdirs();
         plugin.saveResource("locale/en.yml");

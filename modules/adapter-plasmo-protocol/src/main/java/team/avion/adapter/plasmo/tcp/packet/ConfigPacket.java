@@ -33,7 +33,7 @@ public final class ConfigPacket implements PlasmoPacket {
 
     @Override
     public void read(DataInput input) throws IOException {
-        throw new UnsupportedOperationException("ConfigPacket decoding is not used by GeyserVoice");
+        throw new UnsupportedOperationException("ConfigPacket decoding is not used by VoiceCraft.Java");
     }
 
     @Override

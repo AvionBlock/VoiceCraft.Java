@@ -1,8 +1,8 @@
 plugins {
-    id 'com.gradleup.shadow' version '9.4.1'
+    id 'com.gradleup.shadow' version '9.4.3'
 }
 
-description = 'Velocity adapter for GeyserVoice.'
+description = 'Velocity adapter for VoiceCraft.Java.'
 
 dependencies {
     implementation project(':core')
@@ -15,7 +15,7 @@ dependencies {
 
 processResources {
     inputs.properties([
-        id         : 'geyservoice',
+        id         : 'voicecraft-java',
         name       : rootProject.ext.pluginName,
         version    : project.version,
         description: rootProject.description,
@@ -24,7 +24,7 @@ processResources {
 
     filesMatching('velocity-plugin.json') {
         expand(
-            id: 'geyservoice',
+            id: 'voicecraft-java',
             name: rootProject.ext.pluginName,
             version: project.version,
             description: rootProject.description,

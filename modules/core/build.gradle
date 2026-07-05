@@ -1,4 +1,4 @@
-description = 'Core domain and application services for GeyserVoice.'
+description = 'Core domain and application services for VoiceCraft.Java.'
 
 dependencies {
     compileOnly 'net.kyori:adventure-api:4.25.0'

@@ -2,7 +2,7 @@ package team.avion.paper.tasks;
 
 import org.bukkit.scheduler.BukkitRunnable;
 
-import team.avion.paper.GeyserVoice;
+import team.avion.paper.VoiceCraftJava;
 import team.avion.paper.utils.Language;
 import team.avion.proxy.ProxyPlayerSnapshot;
 
@@ -21,13 +21,13 @@ import org.bukkit.util.BlockIterator;
 import org.bukkit.util.Vector;
 
 public class PositionsTask extends BukkitRunnable {
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
     private boolean isConnected = false;
     private int reconnectRetries = 0;
     private boolean reconnecting = false;
 
-    public PositionsTask(GeyserVoice plugin, String lang) {
+    public PositionsTask(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
         this.lang = lang;
     }

@@ -12,15 +12,15 @@ import team.avion.common.commands.BaseVoiceCommand;
 import team.avion.common.utils.DoubleStringOperation;
 import team.avion.common.utils.IntegerOperation;
 import team.avion.common.utils.StringOperation;
-import team.avion.velocity.GeyserVoice;
+import team.avion.velocity.VoiceCraftJava;
 import team.avion.velocity.utils.Language;
 
 public final class VoiceCommand implements SimpleCommand {
     private final BaseVoiceCommand voiceCommand;
-    private final GeyserVoice plugin;
+    private final VoiceCraftJava plugin;
     private final String lang;
 
-    public VoiceCommand(GeyserVoice plugin, String lang) {
+    public VoiceCommand(VoiceCraftJava plugin, String lang) {
         this.voiceCommand = new BaseVoiceCommand(plugin);
         this.plugin = plugin;
         this.lang = lang;

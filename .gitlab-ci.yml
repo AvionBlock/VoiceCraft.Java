@@ -1,0 +1,44 @@
+image: eclipse-temurin:21-jdk
+
+stages:
+  - test
+  - build
+
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+
+default:
+  tags:
+    - ubuntu-docker
+  before_script:
+    - chmod +x gradlew
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .gradle/caches/
+    - .gradle/wrapper/
+
+test:
+  stage: test
+  script:
+    - ./gradlew test --no-daemon
+
+build:
+  stage: build
+  script:
+    - ./gradlew clean build --no-daemon
+    - mkdir -p dist
+    - |
+      find modules -path "*/build/libs/*.jar" \
+        ! -name "*-sources.jar" \
+        ! -name "*-thin.jar" \
+        ! -path "*/core/build/libs/*" \
+        -exec cp {} dist/ \;
+    - test -n "$(find dist -name '*.jar' -print -quit)"
+  artifacts:
+    name: "voicecraft-java-$CI_COMMIT_REF_SLUG"
+    when: always
+    expire_in: 1 week
+    paths:
+      - dist/*.jar

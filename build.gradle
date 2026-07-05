@@ -19,7 +19,7 @@ ext {
         executableBaseName : 'VoiceCraft.Server',
         protocolMajor      : 1,
         protocolMinor      : 7,
-        protocolPatch      : 1
+        protocolPatch      : 0
     ]
 }
 

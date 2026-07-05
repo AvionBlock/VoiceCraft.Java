@@ -1,5 +1,53 @@
 description = 'Core domain and application services for VoiceCraft.Java.'
 
+def generatedVoiceCraftProtocolDir = layout.buildDirectory.dir('generated/sources/voicecraftProtocol/java')
+
+tasks.register('generateVoiceCraftProtocol') {
+    def voiceCraft = rootProject.ext.voiceCraft
+
+    inputs.property('protocolMajor', voiceCraft.protocolMajor)
+    inputs.property('protocolMinor', voiceCraft.protocolMinor)
+    inputs.property('protocolPatch', voiceCraft.protocolPatch)
+    outputs.dir(generatedVoiceCraftProtocolDir)
+
+    doLast {
+        def outputFile = generatedVoiceCraftProtocolDir.get()
+                .file('team/avion/protocol/VoiceCraftProtocol.java')
+                .asFile
+        outputFile.parentFile.mkdirs()
+        outputFile.text = """package team.avion.protocol;
+
+import team.avion.protocol.McProtocolTypes.Version;
+
+public final class VoiceCraftProtocol {
+    public static final int MAJOR = ${voiceCraft.protocolMajor};
+    public static final int MINOR = ${voiceCraft.protocolMinor};
+    public static final int PATCH = ${voiceCraft.protocolPatch};
+
+    public static final Version VERSION = new Version(MAJOR, MINOR, PATCH);
+    public static final String VERSION_STRING = MAJOR + "." + MINOR + "." + PATCH;
+
+    private VoiceCraftProtocol() {
+    }
+}
+"""
+    }
+}
+
+sourceSets {
+    main {
+        java.srcDir(generatedVoiceCraftProtocolDir)
+    }
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('generateVoiceCraftProtocol')
+}
+
+tasks.named('sourcesJar') {
+    dependsOn tasks.named('generateVoiceCraftProtocol')
+}
+
 dependencies {
     compileOnly 'net.kyori:adventure-api:4.25.0'
     compileOnly 'me.clip:placeholderapi:2.12.2'

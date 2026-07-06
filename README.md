@@ -1,5 +1,7 @@
 # VoiceCraft.Java
 
+[English](README.md) | [Русский](README.ru.md) | [Nederlands](README.nl.md) | [日本語](README.ja.md)
+
 VoiceCraft.Java is an ultimate voice chat plugin for Java Minecraft servers.
 
 It turns VoiceCraft into a server-wide voice layer where players using different voice clients can share the same proximity voice space. Simple Voice Chat users, Plasmo Voice users, and players connected through the VoiceCraft client can hear and talk to each other through one backend.

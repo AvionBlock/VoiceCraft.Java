@@ -1,4 +1,4 @@
-﻿config-version: 2 # 編集しないでください: configの自動移行に使用されます
+﻿config-version: 3 # 編集しないでください: configの自動移行に使用されます
 
 config:
   debug: false # 追加のデバッグログを有効化します
@@ -48,6 +48,16 @@ config:
 
     not-in-voice-symbol: "\u2727" # 未リンク時のプレースホルダー記号
     in-voice-symbol: "\u2726" # リンク済み時のプレースホルダー記号
+
+    status-icons:
+      enabled: true # 対応voice-chat modを使っていないプレイヤーの頭上にvanilla itemアイコンを表示
+      update-interval-ticks: 5 # アイコンの位置/状態更新間隔
+      speaking-hold-ms: 600 # 最後の音声フレーム後にspeaking状態を維持する時間
+      height-offset: 2.45 # プレイヤーの足元からのアイコン高さ
+      speaking-icon: "NOTE_BLOCK" # 発話中のアイコン
+      idle-icon: "SCULK_SENSOR" # 接続済みで無音のアイコン
+      no-voice-icon: "BARRIER" # VoiceCraftに接続されていない時のアイコン
+      muted-icon: "GOAT_HORN" # ミュート中のアイコン
 
     send-bind-message: true # Show a message when a player links to VoiceCraft
     send-disconnect-message: true # Show a message when a player leaves voice chat

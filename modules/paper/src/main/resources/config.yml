@@ -1,4 +1,4 @@
-﻿config-version: 2 # DO NOT EDIT: used for automatic config migrations
+﻿config-version: 3 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false
@@ -48,6 +48,16 @@ config:
 
     not-in-voice-symbol: "\u2727"
     in-voice-symbol: "\u2726"
+
+    status-icons:
+      enabled: true
+      update-interval-ticks: 5
+      speaking-hold-ms: 600
+      height-offset: 2.45
+      speaking-icon: "NOTE_BLOCK"
+      idle-icon: "SCULK_SENSOR"
+      no-voice-icon: "BARRIER"
+      muted-icon: "GOAT_HORN"
 
     send-bind-message: true # Show a message when a player links to VoiceCraft
     send-disconnect-message: true # Show a message when a player leaves voice chat

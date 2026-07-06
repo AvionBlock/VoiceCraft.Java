@@ -292,6 +292,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                         statePacket.voiceDisabled(),
                         statePacket.microphoneMuted()
                 ));
+                plugin.setVoiceStatusMuted(player.getUniqueId(), statePacket.microphoneMuted());
                 sessions.byPlayerId(player.getUniqueId())
                         .flatMap(session -> context.audioBridge().entityIdentity(session.voiceCraftEntityId()))
                         .ifPresent(identity -> broadcastPlayerInfo(voicePlayerInfo(identity)));
@@ -360,6 +361,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
 
         PlasmoClientSession session = sessions.createOrReplace(player.getUniqueId(), player.getName(), entityId.getAsInt());
         playerStatesById.put(player.getUniqueId(), new PlasmoPlayerState(packet.voiceDisabled(), packet.microphoneMuted()));
+        plugin.setVoiceStatusMuted(player.getUniqueId(), packet.microphoneMuted());
         context.audioBridge().registerEntityIdentity(new VoiceCraftEntityIdentity(entityId.getAsInt(),
                 player.getUniqueId(), player.getName(), id()));
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId.getAsInt(), session);

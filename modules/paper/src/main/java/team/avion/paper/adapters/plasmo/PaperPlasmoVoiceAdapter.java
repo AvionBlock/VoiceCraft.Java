@@ -61,23 +61,12 @@ import java.util.UUID;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Paper adapter that speaks the Plasmo Voice plugin-message and UDP protocols.
- *
- * <p>The adapter exposes VoiceCraft entities as Plasmo player sources, maintains the Plasmo player
- * and source-line caches, and forwards Opus frames between Plasmo clients and the shared
- * VoiceCraft audio bridge.</p>
- */
 public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAudioSink, VoiceCraftIdentityListener,
         PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_INTERVAL_MS = 1000L;
     private static final long KEEP_ALIVE_TIMEOUT_MS = 30000L;
-    private static final long AUDIO_FRAME_INTERVAL_MS = 20L;
-    private static final int OUTGOING_AUDIO_QUEUE_CAPACITY = 128;
     private static final byte SOURCE_STATE = 1;
     private static final String SOURCE_LINE_TRANSLATION = "pv.activation.proximity";
 
@@ -86,21 +75,17 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     private final PlasmoUdpCodec udpCodec = PlasmoUdpCodecs.createBaseCodec();
     private final UUID serverId = UUID.randomUUID();
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private final AtomicBoolean outgoingAudioRunning = new AtomicBoolean(false);
     private final Map<UUID, PlayerSourceInfo> sourcesById = new ConcurrentHashMap<>();
     private final Map<Integer, PlayerSourceInfo> sourcesByEntityId = new ConcurrentHashMap<>();
     private final Map<Integer, Long> sourceSequencesByEntity = new ConcurrentHashMap<>();
     private final Map<UUID, PlasmoPlayerState> playerStatesById = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> sentSourcesByReceiver = new ConcurrentHashMap<>();
-    private final LinkedBlockingQueue<PendingPlasmoAudio> outgoingAudioQueue =
-            new LinkedBlockingQueue<>(OUTGOING_AUDIO_QUEUE_CAPACITY);
 
     private AdapterState state = AdapterState.NEW;
     private PlasmoSessionManager sessions;
     private AdapterContext context;
     private DatagramSocket udpSocket;
     private Thread udpThread;
-    private Thread outgoingAudioThread;
     private String bindHost;
     private String publicHost;
     private int udpPort;
@@ -156,7 +141,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         udpThread = new Thread(this::runUdpLoop, "VoiceCraft.Java-Plasmo-UDP");
         udpThread.setDaemon(true);
         udpThread.start();
-        startOutgoingAudioLoop();
 
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, PlasmoChannels.MAIN);
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, PlasmoChannels.FLAG);
@@ -186,7 +170,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             context.audioBridge().unregisterIdentityListener(this);
         }
 
-        stopOutgoingAudioLoop();
         if (udpSocket != null) {
             udpSocket.close();
         }
@@ -208,7 +191,30 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
 
         PlasmoClientSession sourceSession = sessions.byEntityId(entityId).orElse(null);
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId, sourceSession);
-        enqueueOutgoingAudio(PendingPlasmoAudio.frame(entityId, sourceInfo, sourceSession, opusFrame));
+        SourceAudioPacket packet = new SourceAudioPacket(
+                sourceInfo.sourceId(),
+                sourceInfo.state(),
+                (short) Math.max(0, Math.min(Short.MAX_VALUE, proximityDistance)),
+                nextPlasmoSequence(entityId),
+                opusFrame
+        );
+
+        for (PlasmoClientSession receiver : sessions.sessions()) {
+            if (receiver.remoteAddress() == null) {
+                continue;
+            }
+            if (sourceSession != null && receiver.playerId().equals(sourceSession.playerId())) {
+                continue;
+            }
+            try {
+                sendSourceInfoIfNeeded(receiver, sourceInfo);
+                sendUdpPacket(packet, receiver.udpSecret(), receiver.remoteAddress());
+                debugForwardedAudio(opusFrame.length);
+            } catch (Exception exception) {
+                plugin.Logger.warn("Failed to forward Plasmo audio to " + receiver.playerName()
+                        + ": " + exception.getMessage());
+            }
+        }
     }
 
     @Override
@@ -219,7 +225,18 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
 
         PlasmoClientSession sourceSession = sessions.byEntityId(entityId).orElse(null);
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId, sourceSession);
-        enqueueOutgoingAudio(PendingPlasmoAudio.end(entityId, sourceInfo, sourceSession));
+        SourceAudioEndPacket packet = new SourceAudioEndPacket(sourceInfo.sourceId(), nextPlasmoSequence(entityId));
+
+        for (PlasmoClientSession receiver : sessions.sessions()) {
+            if (receiver.playerId().equals(sourceInfo.sourceId())) {
+                continue;
+            }
+            Player player = plugin.getServer().getPlayer(receiver.playerId());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            sendTcpPacket(player, packet);
+        }
     }
 
     @Override
@@ -227,7 +244,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (!running.get() || !plugin.isEnabled()) {
             return;
         }
-        runPluginTask(() -> {
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
             PlayerSourceInfo sourceInfo = sourceInfoForEntity(identity.entityId(),
                     sessions.byPlayerId(identity.playerId()).orElse(null));
             broadcastPlayerInfo(voicePlayerInfo(identity));
@@ -245,7 +262,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         sourceSequencesByEntity.remove(identity.entityId());
         playerStatesById.remove(identity.playerId());
         sentSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(identity.playerId()));
-        runPluginTask(() -> broadcastPlayerDisconnect(identity.playerId()));
+        plugin.getServer().getScheduler().runTask(plugin, () -> broadcastPlayerDisconnect(identity.playerId()));
     }
 
     @Override
@@ -300,7 +317,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             return;
         }
 
-        runPluginTask(() -> requestPlayerInfo(event.getPlayer()));
+        plugin.getServer().getScheduler().runTask(plugin, () -> requestPlayerInfo(event.getPlayer()));
     }
 
     @EventHandler
@@ -443,109 +460,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         udpSocket.send(datagram);
     }
 
-    private void startOutgoingAudioLoop() {
-        if (!outgoingAudioRunning.compareAndSet(false, true)) {
-            return;
-        }
-        outgoingAudioThread = new Thread(this::runOutgoingAudioLoop, "VoiceCraft.Java-Plasmo-AudioOut");
-        outgoingAudioThread.setDaemon(true);
-        outgoingAudioThread.start();
-    }
-
-    private void stopOutgoingAudioLoop() {
-        if (!outgoingAudioRunning.getAndSet(false)) {
-            return;
-        }
-        if (outgoingAudioThread != null) {
-            outgoingAudioThread.interrupt();
-            try {
-                outgoingAudioThread.join(2000);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-            }
-            outgoingAudioThread = null;
-        }
-        outgoingAudioQueue.clear();
-    }
-
-    private void runOutgoingAudioLoop() {
-        while (outgoingAudioRunning.get()) {
-            try {
-                PendingPlasmoAudio audio = outgoingAudioQueue.poll(20L, TimeUnit.MILLISECONDS);
-                if (audio == null) {
-                    continue;
-                }
-
-                sendQueuedAudio(audio);
-                Thread.sleep(AUDIO_FRAME_INTERVAL_MS);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                break;
-            } catch (Exception exception) {
-                plugin.Logger.warn("Plasmo outgoing audio worker failed: " + exception.getMessage());
-            }
-        }
-    }
-
-    private void enqueueOutgoingAudio(PendingPlasmoAudio audio) {
-        if (outgoingAudioQueue.offer(audio)) {
-            return;
-        }
-
-        outgoingAudioQueue.poll();
-        outgoingAudioQueue.offer(audio);
-    }
-
-    private void sendQueuedAudio(PendingPlasmoAudio audio) {
-        if (audio.end()) {
-            sendQueuedAudioEnd(audio);
-            return;
-        }
-
-        SourceAudioPacket packet = new SourceAudioPacket(
-                audio.sourceInfo().sourceId(),
-                audio.sourceInfo().state(),
-                (short) Math.max(0, Math.min(Short.MAX_VALUE, proximityDistance)),
-                nextPlasmoSequence(audio.entityId()),
-                audio.opusFrame()
-        );
-
-        for (PlasmoClientSession receiver : sessions.sessions()) {
-            if (receiver.remoteAddress() == null) {
-                continue;
-            }
-            if (audio.sourceSession() != null && receiver.playerId().equals(audio.sourceSession().playerId())) {
-                continue;
-            }
-            try {
-                sendSourceInfoIfNeeded(receiver, audio.sourceInfo());
-                sendUdpPacket(packet, receiver.udpSecret(), receiver.remoteAddress());
-                debugForwardedAudio(audio.opusFrame().length);
-            } catch (Exception exception) {
-                plugin.Logger.warn("Failed to forward Plasmo audio to " + receiver.playerName()
-                        + ": " + exception.getMessage());
-            }
-        }
-    }
-
-    private void sendQueuedAudioEnd(PendingPlasmoAudio audio) {
-        SourceAudioEndPacket packet = new SourceAudioEndPacket(
-                audio.sourceInfo().sourceId(),
-                nextPlasmoSequence(audio.entityId())
-        );
-
-        for (PlasmoClientSession receiver : sessions.sessions()) {
-            if (receiver.playerId().equals(audio.sourceInfo().sourceId())) {
-                continue;
-            }
-            Player player = plugin.getServer().getPlayer(receiver.playerId());
-            if (player == null || !player.isOnline()) {
-                continue;
-            }
-            sendTcpPacket(player, packet);
-        }
-    }
-
     private PlayerSourceInfo sourceInfoForEntity(int entityId, PlasmoClientSession session) {
         VoiceCraftEntityIdentity identity = context.audioBridge().entityIdentity(entityId)
                 .orElseGet(() -> session != null
@@ -612,15 +526,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         return UUID.nameUUIDFromBytes(("voicecraft-entity:" + entityId).getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * Returns the next Plasmo source sequence number for an entity.
-     *
-     * <p>Plasmo clients use monotonically increasing source sequence numbers for jitter buffering,
-     * so adapter-local numbering is safer than forwarding timestamps from other protocols.</p>
-     *
-     * @param entityId VoiceCraft entity id
-     * @return next source sequence number
-     */
     private long nextPlasmoSequence(int entityId) {
         return sourceSequencesByEntity.merge(entityId, 1L, Long::sum);
     }
@@ -685,11 +590,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (!plugin.isEnabled()) {
             return;
         }
-        try {
-            plugin.getServer().getScheduler().runTask(plugin, task);
-        } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
-            // The server may disable the plugin between the enabled check and scheduler registration.
-        }
+        plugin.getServer().getScheduler().runTask(plugin, task);
     }
 
     private boolean markSourceInfoSent(UUID receiverId, UUID sourceId) {
@@ -749,18 +650,5 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     }
 
     private record PlasmoPlayerState(boolean voiceDisabled, boolean microphoneMuted) {
-    }
-
-    private record PendingPlasmoAudio(int entityId, PlayerSourceInfo sourceInfo, PlasmoClientSession sourceSession,
-                                      byte[] opusFrame, boolean end) {
-        private static PendingPlasmoAudio frame(int entityId, PlayerSourceInfo sourceInfo,
-                                                PlasmoClientSession sourceSession, byte[] opusFrame) {
-            return new PendingPlasmoAudio(entityId, sourceInfo, sourceSession, opusFrame, false);
-        }
-
-        private static PendingPlasmoAudio end(int entityId, PlayerSourceInfo sourceInfo,
-                                              PlasmoClientSession sourceSession) {
-            return new PendingPlasmoAudio(entityId, sourceInfo, sourceSession, null, true);
-        }
     }
 }

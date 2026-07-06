@@ -31,6 +31,15 @@ public interface VoiceCraftAudioBridge {
     }
 
     /**
+     * Publishes explicit activity state for a VoiceCraft entity.
+     *
+     * @param entityId the VoiceCraft entity id whose activity changed
+     * @param state new voice activity state
+     */
+    default void sendEntityVoiceActivity(int entityId, VoiceActivityState state) {
+    }
+
+    /**
      * Registers an adapter that should receive bridged entity audio.
      *
      * @param sink audio sink to register

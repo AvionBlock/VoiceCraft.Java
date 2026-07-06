@@ -22,4 +22,13 @@ public interface VoiceCraftAudioSink {
      */
     default void receiveEntityAudioEnd(int entityId, long sequenceNumber) {
     }
+
+    /**
+     * Receives explicit voice activity state for a VoiceCraft entity.
+     *
+     * @param entityId the VoiceCraft entity id whose activity changed
+     * @param state new voice activity state
+     */
+    default void receiveEntityVoiceActivity(int entityId, VoiceActivityState state) {
+    }
 }

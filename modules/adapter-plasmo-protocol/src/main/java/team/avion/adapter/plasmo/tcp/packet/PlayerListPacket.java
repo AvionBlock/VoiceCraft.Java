@@ -10,12 +10,20 @@ import java.util.List;
 
 import team.avion.adapter.plasmo.data.VoicePlayerInfo;
 
+/**
+ * Clientbound Plasmo packet that sends the initial voice player list.
+ */
 public final class PlayerListPacket implements PlasmoPacket {
     private Collection<VoicePlayerInfo> players = List.of();
 
     public PlayerListPacket() {
     }
 
+    /**
+     * Creates an initial player list packet.
+     *
+     * @param players currently visible voice players
+     */
     public PlayerListPacket(Collection<VoicePlayerInfo> players) {
         this.players = players;
     }

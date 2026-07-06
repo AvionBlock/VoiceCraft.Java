@@ -41,6 +41,13 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Paper adapter that speaks the Simple Voice Chat plugin-message and UDP protocols.
+ *
+ * <p>The adapter performs the SVC secret handshake, tracks UDP sessions, publishes SVC player
+ * states, and forwards Opus frames between Simple Voice Chat clients and the shared VoiceCraft
+ * audio bridge.</p>
+ */
 public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCraftAudioSink, VoiceCraftIdentityListener,
         PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_TIMEOUT_FACTOR = 10L;
@@ -206,7 +213,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         if (!running.get() || !plugin.isEnabled()) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, () -> broadcastState(identity));
+        runPluginTask(() -> broadcastState(identity));
     }
 
     @Override
@@ -216,7 +223,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         }
         sentStates.removeIf(key -> key.startsWith(identity.playerId() + ":")
                 || key.endsWith(":" + identity.playerId()));
-        plugin.getServer().getScheduler().runTask(plugin, () -> broadcastRemoveState(identity.playerId()));
+        runPluginTask(() -> broadcastRemoveState(identity.playerId()));
     }
 
     private UUID syntheticSourceId(int entityId) {
@@ -502,7 +509,11 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         if (!plugin.isEnabled()) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, task);
+        try {
+            plugin.getServer().getScheduler().runTask(plugin, task);
+        } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
+            // The server may disable the plugin between the enabled check and scheduler registration.
+        }
     }
 
     private void debug(String message) {

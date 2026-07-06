@@ -7,12 +7,20 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
+/**
+ * Clientbound Plasmo packet that registers a source line in the client source manager.
+ */
 public final class SourceLineRegisterPacket implements PlasmoPacket {
     private VoiceSourceLine sourceLine;
 
     public SourceLineRegisterPacket() {
     }
 
+    /**
+     * Creates a registration packet for the provided source line.
+     *
+     * @param sourceLine source line definition
+     */
     public SourceLineRegisterPacket(VoiceSourceLine sourceLine) {
         this.sourceLine = sourceLine;
     }

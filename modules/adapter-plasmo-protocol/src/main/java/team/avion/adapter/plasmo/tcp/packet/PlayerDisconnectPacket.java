@@ -8,12 +8,20 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * Clientbound Plasmo packet that removes a player from the client voice player cache.
+ */
 public final class PlayerDisconnectPacket implements PlasmoPacket {
     private UUID playerId;
 
     public PlayerDisconnectPacket() {
     }
 
+    /**
+     * Creates a packet for the given disconnected player.
+     *
+     * @param playerId Minecraft player UUID to remove
+     */
     public PlayerDisconnectPacket(UUID playerId) {
         this.playerId = playerId;
     }

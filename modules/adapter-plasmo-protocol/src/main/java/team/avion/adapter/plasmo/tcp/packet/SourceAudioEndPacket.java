@@ -8,6 +8,9 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * Clientbound Plasmo packet that marks the end of an audio sequence for a source.
+ */
 public final class SourceAudioEndPacket implements PlasmoPacket {
     private UUID sourceId;
     private long sequenceNumber;
@@ -15,6 +18,12 @@ public final class SourceAudioEndPacket implements PlasmoPacket {
     public SourceAudioEndPacket() {
     }
 
+    /**
+     * Creates an audio-end packet for a source.
+     *
+     * @param sourceId Plasmo source UUID
+     * @param sequenceNumber final source sequence number
+     */
     public SourceAudioEndPacket(UUID sourceId, long sequenceNumber) {
         this.sourceId = sourceId;
         this.sequenceNumber = sequenceNumber;

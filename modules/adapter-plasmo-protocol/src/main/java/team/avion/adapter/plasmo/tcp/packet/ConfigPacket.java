@@ -11,6 +11,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Clientbound Plasmo config packet sent after UDP reachability is established.
+ *
+ * <p>The packet declares capture codec settings, proximity source line and activation metadata,
+ * permissions, and player icon configuration.</p>
+ */
 public final class ConfigPacket implements PlasmoPacket {
     public static final String PROXIMITY_NAME = "proximity";
     public static final UUID PROXIMITY_SOURCE_LINE_ID =
@@ -26,6 +32,12 @@ public final class ConfigPacket implements PlasmoPacket {
     public ConfigPacket() {
     }
 
+    /**
+     * Creates a Plasmo config packet with the configured proximity distance.
+     *
+     * @param serverId stable VoiceCraft adapter server id
+     * @param proximityDistance proximity voice distance
+     */
     public ConfigPacket(UUID serverId, int proximityDistance) {
         this.serverId = serverId;
         this.proximityDistance = proximityDistance;
@@ -64,6 +76,12 @@ public final class ConfigPacket implements PlasmoPacket {
         writeOpusCodec(output);
     }
 
+    /**
+     * Writes Opus codec metadata in the format expected by Plasmo codec managers.
+     *
+     * @param output destination stream
+     * @throws IOException if writing fails
+     */
     private void writeOpusCodec(DataOutput output) throws IOException {
         output.writeUTF("opus");
         output.writeInt(2);

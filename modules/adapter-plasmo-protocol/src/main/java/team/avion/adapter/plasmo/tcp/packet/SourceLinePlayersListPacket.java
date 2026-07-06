@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.UUID;
 
+/**
+ * Clientbound Plasmo packet that replaces the player list attached to a source line.
+ */
 public final class SourceLinePlayersListPacket implements PlasmoPacket {
     private UUID lineId;
     private Collection<McGameProfile> players;
@@ -17,6 +20,12 @@ public final class SourceLinePlayersListPacket implements PlasmoPacket {
     public SourceLinePlayersListPacket() {
     }
 
+    /**
+     * Creates a source-line player list update.
+     *
+     * @param lineId Plasmo source line UUID
+     * @param players players visible on that line
+     */
     public SourceLinePlayersListPacket(UUID lineId, Collection<McGameProfile> players) {
         this.lineId = lineId;
         this.players = players;

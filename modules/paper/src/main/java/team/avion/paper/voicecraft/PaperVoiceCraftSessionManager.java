@@ -49,6 +49,12 @@ import team.avion.protocol.McProtocolEnums.CreateEntityResponseCode;
 import team.avion.protocol.McProtocolTypes.Vector2;
 import team.avion.protocol.McProtocolTypes.Vector3;
 
+/**
+ * Paper-side VoiceCraft session manager and audio bridge implementation.
+ *
+ * <p>This class owns the TCP session to the VoiceCraft backend, keeps Minecraft players bound to
+ * VoiceCraft entity ids, and fans audio frames out to protocol adapters.</p>
+ */
 public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridge {
     private static final int EFFECT_BITMASK_PROXIMITY = 1;
 
@@ -79,6 +85,16 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         this.client = new McApiTcpClient(plugin.Logger);
     }
 
+    /**
+     * Updates the backend connection and voice effect settings used by the next connection.
+     *
+     * @param host VoiceCraft TCP host
+     * @param port VoiceCraft TCP port
+     * @param loginKey VoiceCraft login key
+     * @param proximityDistance proximity effect distance
+     * @param proximityToggle whether proximity attenuation is enabled
+     * @param voiceEffects whether voice effects are enabled
+     */
     public synchronized void configure(String host, int port, String loginKey, int proximityDistance,
             boolean proximityToggle, boolean voiceEffects) {
         this.host = host == null ? "" : host;
@@ -89,6 +105,11 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         this.voiceEffects = voiceEffects;
     }
 
+    /**
+     * Opens the VoiceCraft TCP session and starts the audio worker.
+     *
+     * @return {@code true} when the backend connection is active
+     */
     public synchronized boolean connect() {
         stopAudioWorker();
         if (host.isBlank() || loginKey.isBlank() || port <= 0) {
@@ -108,12 +129,18 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         return client.isConnected();
     }
 
+    /**
+     * Logs out from the VoiceCraft backend and clears local entity state.
+     */
     public synchronized void disconnect() {
         stopAudioWorker();
         client.logout();
         clearSessionState();
     }
 
+    /**
+     * Closes the VoiceCraft backend client and clears local entity state.
+     */
     public synchronized void close() {
         stopAudioWorker();
         client.close();
@@ -137,6 +164,12 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         return lastCreateEntityFailure;
     }
 
+    /**
+     * Creates and initializes a VoiceCraft entity for a Minecraft player.
+     *
+     * @param player Bukkit player to bind
+     * @return created or existing VoiceCraft entity id
+     */
     public synchronized OptionalInt createEntityForPlayer(Player player) {
         lastCreateEntityFailure = "";
 
@@ -203,6 +236,11 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         return OptionalInt.empty();
     }
 
+    /**
+     * Destroys the VoiceCraft entity bound to a player name.
+     *
+     * @param playerName Minecraft player name
+     */
     public synchronized void destroyEntityForPlayer(String playerName) {
         BoundEntity boundEntity = boundEntitiesByPlayerName.remove(playerName);
         if (boundEntity == null || !client.isConnected()) {

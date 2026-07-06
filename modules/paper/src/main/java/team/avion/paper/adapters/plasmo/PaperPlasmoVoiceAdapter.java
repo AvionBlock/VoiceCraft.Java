@@ -63,6 +63,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Paper adapter that speaks the Plasmo Voice plugin-message and UDP protocols.
+ *
+ * <p>The adapter exposes VoiceCraft entities as Plasmo player sources, maintains the Plasmo player
+ * and source-line caches, and forwards Opus frames between Plasmo clients and the shared
+ * VoiceCraft audio bridge.</p>
+ */
 public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAudioSink, VoiceCraftIdentityListener,
         PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_INTERVAL_MS = 1000L;
@@ -244,7 +251,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (!running.get() || !plugin.isEnabled()) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        runPluginTask(() -> {
             PlayerSourceInfo sourceInfo = sourceInfoForEntity(identity.entityId(),
                     sessions.byPlayerId(identity.playerId()).orElse(null));
             broadcastPlayerInfo(voicePlayerInfo(identity));
@@ -262,7 +269,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         sourceSequencesByEntity.remove(identity.entityId());
         playerStatesById.remove(identity.playerId());
         sentSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(identity.playerId()));
-        plugin.getServer().getScheduler().runTask(plugin, () -> broadcastPlayerDisconnect(identity.playerId()));
+        runPluginTask(() -> broadcastPlayerDisconnect(identity.playerId()));
     }
 
     @Override
@@ -317,7 +324,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             return;
         }
 
-        plugin.getServer().getScheduler().runTask(plugin, () -> requestPlayerInfo(event.getPlayer()));
+        runPluginTask(() -> requestPlayerInfo(event.getPlayer()));
     }
 
     @EventHandler
@@ -526,6 +533,15 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         return UUID.nameUUIDFromBytes(("voicecraft-entity:" + entityId).getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Returns the next Plasmo source sequence number for an entity.
+     *
+     * <p>Plasmo clients use monotonically increasing source sequence numbers for jitter buffering,
+     * so adapter-local numbering is safer than forwarding timestamps from other protocols.</p>
+     *
+     * @param entityId VoiceCraft entity id
+     * @return next source sequence number
+     */
     private long nextPlasmoSequence(int entityId) {
         return sourceSequencesByEntity.merge(entityId, 1L, Long::sum);
     }
@@ -590,7 +606,11 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (!plugin.isEnabled()) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, task);
+        try {
+            plugin.getServer().getScheduler().runTask(plugin, task);
+        } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
+            // The server may disable the plugin between the enabled check and scheduler registration.
+        }
     }
 
     private boolean markSourceInfoSent(UUID receiverId, UUID sourceId) {

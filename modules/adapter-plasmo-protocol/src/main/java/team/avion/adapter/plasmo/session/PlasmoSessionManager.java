@@ -15,6 +15,7 @@ public final class PlasmoSessionManager {
     private final VoiceCraftAudioBridge audioBridge;
     private final Map<UUID, PlasmoClientSession> sessionsByPlayerId = new ConcurrentHashMap<>();
     private final Map<UUID, PlasmoClientSession> sessionsBySecret = new ConcurrentHashMap<>();
+    private final Map<Integer, PlasmoClientSession> sessionsByEntityId = new ConcurrentHashMap<>();
 
     public PlasmoSessionManager(VoiceCraftAudioBridge audioBridge) {
         this.audioBridge = audioBridge;
@@ -31,6 +32,7 @@ public final class PlasmoSessionManager {
         );
         sessionsByPlayerId.put(playerId, session);
         sessionsBySecret.put(session.udpSecret(), session);
+        sessionsByEntityId.put(voiceCraftEntityId, session);
         return session;
     }
 
@@ -42,6 +44,10 @@ public final class PlasmoSessionManager {
         return Optional.ofNullable(sessionsBySecret.get(secret));
     }
 
+    public Optional<PlasmoClientSession> byEntityId(int entityId) {
+        return Optional.ofNullable(sessionsByEntityId.get(entityId));
+    }
+
     public Collection<PlasmoClientSession> sessions() {
         return sessionsBySecret.values();
     }
@@ -50,6 +56,7 @@ public final class PlasmoSessionManager {
         PlasmoClientSession removed = sessionsByPlayerId.remove(playerId);
         if (removed != null) {
             sessionsBySecret.remove(removed.udpSecret());
+            sessionsByEntityId.remove(removed.voiceCraftEntityId());
         }
     }
 

@@ -2,6 +2,7 @@ package team.avion.adapter.simplevoicechat.net;
 
 public enum SimpleVoiceChatPacketType {
     MIC(0x1),
+    PLAYER_SOUND(0x2),
     AUTHENTICATE(0x5),
     AUTHENTICATE_ACK(0x6),
     KEEP_ALIVE(0x8),

@@ -20,6 +20,11 @@ public abstract class BaseAudioPacket implements PlasmoPacket {
         return data;
     }
 
+    protected void setAudio(long sequenceNumber, byte[] data) {
+        this.sequenceNumber = sequenceNumber;
+        this.data = data == null ? new byte[0] : data;
+    }
+
     @Override
     public void read(DataInput input) throws IOException {
         sequenceNumber = input.readLong();

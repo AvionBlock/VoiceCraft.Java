@@ -12,6 +12,16 @@ public final class SourceAudioPacket extends BaseAudioPacket {
     private byte sourceState;
     private short distance;
 
+    public SourceAudioPacket() {
+    }
+
+    public SourceAudioPacket(UUID sourceId, byte sourceState, short distance, long sequenceNumber, byte[] data) {
+        this.sourceId = sourceId;
+        this.sourceState = sourceState;
+        this.distance = distance;
+        setAudio(sequenceNumber, data);
+    }
+
     public UUID sourceId() {
         return sourceId;
     }

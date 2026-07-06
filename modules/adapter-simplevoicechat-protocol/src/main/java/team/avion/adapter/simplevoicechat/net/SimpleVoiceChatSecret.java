@@ -4,6 +4,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 public final class SimpleVoiceChatSecret {
     public static final int SECRET_BYTES = 16;
@@ -59,5 +60,18 @@ public final class SimpleVoiceChatSecret {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
         return cipher.doFinal(encrypted);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (!(object instanceof SimpleVoiceChatSecret other)) {
+            return false;
+        }
+        return Arrays.equals(value, other.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(value);
     }
 }

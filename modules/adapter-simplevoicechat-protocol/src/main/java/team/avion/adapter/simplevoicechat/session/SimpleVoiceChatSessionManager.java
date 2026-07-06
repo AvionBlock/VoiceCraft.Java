@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class SimpleVoiceChatSessionManager {
     private final VoiceCraftAudioBridge audioBridge;
     private final Map<UUID, SimpleVoiceChatClientSession> sessionsByPlayerId = new ConcurrentHashMap<>();
+    private final Map<Integer, SimpleVoiceChatClientSession> sessionsByEntityId = new ConcurrentHashMap<>();
 
     public SimpleVoiceChatSessionManager(VoiceCraftAudioBridge audioBridge) {
         this.audioBridge = audioBridge;
@@ -27,6 +28,7 @@ public final class SimpleVoiceChatSessionManager {
                 SimpleVoiceChatSecret.random()
         );
         sessionsByPlayerId.put(playerId, session);
+        sessionsByEntityId.put(voiceCraftEntityId, session);
         return session;
     }
 
@@ -34,12 +36,19 @@ public final class SimpleVoiceChatSessionManager {
         return Optional.ofNullable(sessionsByPlayerId.get(playerId));
     }
 
+    public Optional<SimpleVoiceChatClientSession> byEntityId(int entityId) {
+        return Optional.ofNullable(sessionsByEntityId.get(entityId));
+    }
+
     public Collection<SimpleVoiceChatClientSession> sessions() {
         return sessionsByPlayerId.values();
     }
 
     public void remove(UUID playerId) {
-        sessionsByPlayerId.remove(playerId);
+        SimpleVoiceChatClientSession removed = sessionsByPlayerId.remove(playerId);
+        if (removed != null) {
+            sessionsByEntityId.remove(removed.voiceCraftEntityId());
+        }
     }
 
     public void forwardAudio(SimpleVoiceChatClientSession session, MicPacket packet) {

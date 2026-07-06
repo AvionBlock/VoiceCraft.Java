@@ -10,6 +10,7 @@ import team.avion.adapter.plasmo.tcp.packet.PlayerListPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerInfoPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerInfoRequestPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerStatePacket;
+import team.avion.adapter.plasmo.tcp.packet.SourceInfoPacket;
 import team.avion.adapter.plasmo.tcp.packet.SourceInfoRequestPacket;
 
 public final class PlasmoTcpCodecs {
@@ -29,6 +30,7 @@ public final class PlasmoTcpCodecs {
         codec.register(PlasmoTcpPacketType.PLAYER_AUDIO_END, PlayerAudioEndPacket.class, PlayerAudioEndPacket::new);
         codec.register(PlasmoTcpPacketType.PLAYER_ACTIVATION_DISTANCES, PlayerActivationDistancesPacket.class, PlayerActivationDistancesPacket::new);
         codec.register(PlasmoTcpPacketType.SOURCE_INFO_REQUEST, SourceInfoRequestPacket.class, SourceInfoRequestPacket::new);
+        codec.register(PlasmoTcpPacketType.SOURCE_INFO, SourceInfoPacket.class, SourceInfoPacket::new);
         return codec;
     }
 }

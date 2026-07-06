@@ -8,10 +8,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.bukkit.entity.Player;
 
 import team.avion.adapter.VoiceCraftAudioBridge;
+import team.avion.adapter.VoiceCraftAudioSink;
 import team.avion.paper.VoiceCraftJava;
 import team.avion.proxy.ProxyPlayerSnapshot;
 import team.avion.protocol.McApiTcpClient;
@@ -24,6 +26,7 @@ import team.avion.protocol.McPackets.DestroyEntityRequestPacket;
 import team.avion.protocol.McPackets.EntityAudioRequestPacket;
 import team.avion.protocol.McPackets.EventRequestPacket;
 import team.avion.protocol.McPackets.McApiPacket;
+import team.avion.protocol.McPackets.OnEntityAudioDataReceivedPacket;
 import team.avion.protocol.McPackets.OnEntityDestroyedPacket;
 import team.avion.protocol.McPackets.OnNetworkEntityCreatedPacket;
 import team.avion.protocol.McPackets.PingRequestPacket;
@@ -59,6 +62,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private boolean proximityToggle = true;
     private boolean voiceEffects = true;
     private String lastCreateEntityFailure = "";
+    private final List<VoiceCraftAudioSink> audioSinks = new CopyOnWriteArrayList<>();
 
     public PaperVoiceCraftSessionManager(VoiceCraftJava plugin) {
         this.plugin = plugin;
@@ -212,6 +216,18 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         processPackets(client.exchange(List.of(packet)));
     }
 
+    @Override
+    public void registerAudioSink(VoiceCraftAudioSink sink) {
+        if (sink != null && !audioSinks.contains(sink)) {
+            audioSinks.add(sink);
+        }
+    }
+
+    @Override
+    public void unregisterAudioSink(VoiceCraftAudioSink sink) {
+        audioSinks.remove(sink);
+    }
+
     public synchronized boolean updateSettings(int proximityDistance, boolean proximityToggle, boolean voiceEffects) {
         this.proximityDistance = proximityDistance;
         this.proximityToggle = proximityToggle;
@@ -357,7 +373,20 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
             }
             if (packet instanceof OnEntityDestroyedPacket destroyedPacket) {
                 handleEntityDestroyed(destroyedPacket.Id);
+                continue;
             }
+            if (packet instanceof OnEntityAudioDataReceivedPacket audioPacket) {
+                handleEntityAudio(audioPacket);
+            }
+        }
+    }
+
+    private void handleEntityAudio(OnEntityAudioDataReceivedPacket packet) {
+        if (packet.Data == null || packet.Data.length == 0) {
+            return;
+        }
+        for (VoiceCraftAudioSink sink : audioSinks) {
+            sink.receiveEntityAudio(packet.Id, packet.Timestamp, packet.FrameLoudness, packet.Data);
         }
     }
 

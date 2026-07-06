@@ -9,14 +9,17 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 import team.avion.adapter.AdapterContext;
 import team.avion.adapter.AdapterState;
 import team.avion.adapter.VoiceAdapter;
+import team.avion.adapter.VoiceCraftAudioSink;
 import team.avion.adapter.simplevoicechat.SimpleVoiceChatChannels;
 import team.avion.adapter.simplevoicechat.net.AuthenticatePacket;
 import team.avion.adapter.simplevoicechat.net.MicPacket;
+import team.avion.adapter.simplevoicechat.net.PlayerSoundPacket;
 import team.avion.adapter.simplevoicechat.net.SimplePacket;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatPacketType;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatTcpCodec;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatUdpCodec;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatUdpEnvelope;
+import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatUdpPacket;
 import team.avion.adapter.simplevoicechat.session.SimpleVoiceChatClientSession;
 import team.avion.adapter.simplevoicechat.session.SimpleVoiceChatSessionManager;
 import team.avion.paper.VoiceCraftJava;
@@ -28,11 +31,13 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMessageListener, Listener {
+public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCraftAudioSink, PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_TIMEOUT_FACTOR = 10L;
 
     private final VoiceCraftJava plugin;
@@ -54,6 +59,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
     private double voiceDistance;
     private boolean allowRecording;
     private boolean debug;
+    private AdapterContext context;
 
     public PaperSimpleVoiceChatAdapter(VoiceCraftJava plugin) {
         this.plugin = plugin;
@@ -81,6 +87,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
         }
 
         state = AdapterState.STARTING;
+        this.context = context;
         this.sessions = new SimpleVoiceChatSessionManager(context.audioBridge());
         this.bindHost = plugin.getConfig().getString("config.adapters.simple-voice-chat.bind-host", "0.0.0.0");
         this.udpPort = plugin.getConfig().getInt("config.adapters.simple-voice-chat.port", 24455);
@@ -104,6 +111,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
         plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, SimpleVoiceChatChannels.REQUEST_SECRET, this);
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.SECRET);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        context.audioBridge().registerAudioSink(this);
         state = AdapterState.RUNNING;
         plugin.Logger.info("Simple Voice Chat adapter listening on " + bindHost + ":" + udpPort
                 + " and advertising " + (voiceHost.isBlank() ? "<minecraft host>" : voiceHost) + ":" + publicPort + ".");
@@ -120,6 +128,9 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
         HandlerList.unregisterAll(this);
         plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, SimpleVoiceChatChannels.REQUEST_SECRET, this);
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.SECRET);
+        if (context != null) {
+            context.audioBridge().unregisterAudioSink(this);
+        }
 
         if (udpSocket != null) {
             udpSocket.close();
@@ -132,6 +143,44 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
             }
         }
         state = AdapterState.STOPPED;
+    }
+
+    @Override
+    public void receiveEntityAudio(int entityId, int timestamp, float loudness, byte[] opusFrame) {
+        if (!running.get() || opusFrame == null || opusFrame.length == 0) {
+            return;
+        }
+
+        Optional<SimpleVoiceChatClientSession> sourceSession = sessions.byEntityId(entityId);
+        UUID sourceId = sourceSession
+                .map(SimpleVoiceChatClientSession::playerId)
+                .orElseGet(() -> syntheticSourceId(entityId));
+        PlayerSoundPacket packet = new PlayerSoundPacket(
+                sourceId,
+                sourceId,
+                opusFrame,
+                Integer.toUnsignedLong(timestamp),
+                false,
+                (float) voiceDistance
+        );
+        for (SimpleVoiceChatClientSession receiver : sessions.sessions()) {
+            if (!receiver.connected() || receiver.remoteAddress() == null
+                    || sourceSession.map(source -> receiver.playerId().equals(source.playerId())).orElse(false)) {
+                continue;
+            }
+            try {
+                sendUdpPacket(packet, receiver);
+                debug("Forwarded VoiceCraft audio entity=" + entityId + " source=" + sourceId
+                        + " to " + receiver.playerName() + " bytes=" + opusFrame.length + ".");
+            } catch (Exception exception) {
+                plugin.Logger.warn("Failed to forward Simple Voice Chat audio to " + receiver.playerName()
+                        + ": " + exception.getMessage());
+            }
+        }
+    }
+
+    private UUID syntheticSourceId(int entityId) {
+        return UUID.nameUUIDFromBytes(("voicecraft-entity:" + entityId).getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
@@ -169,6 +218,14 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
             return;
         }
 
+        Optional<SimpleVoiceChatClientSession> existingSession = sessions.byPlayerId(player.getUniqueId());
+        if (existingSession.isPresent()) {
+            sendSecret(player, existingSession.get());
+            debug("Resent Simple Voice Chat secret to " + player.getName()
+                    + " entity=" + existingSession.get().voiceCraftEntityId() + ".");
+            return;
+        }
+
         OptionalInt entityId = plugin.getSessionManager().createEntityForPlayer(player);
         if (entityId.isEmpty()) {
             String reason = plugin.getSessionManager().getLastCreateEntityFailure();
@@ -182,6 +239,11 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
                 player.getName(),
                 entityId.getAsInt()
         );
+        sendSecret(player, session);
+        debug("Sent Simple Voice Chat secret to " + player.getName() + " entity=" + entityId.getAsInt() + ".");
+    }
+
+    private void sendSecret(Player player, SimpleVoiceChatClientSession session) {
         byte[] payload = tcpCodec.encodeSecret(
                 session.secret(),
                 publicPort,
@@ -193,7 +255,6 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
                 allowRecording
         );
         sendSecretPacket(player, payload);
-        debug("Sent Simple Voice Chat secret to " + player.getName() + " entity=" + entityId.getAsInt() + ".");
     }
 
     private void sendSecretPacket(Player player, byte[] payload) {
@@ -288,6 +349,10 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
                 debug("Ignored Simple Voice Chat auth with mismatched player id " + authenticatePacket.playerId() + ".");
                 return;
             }
+            if (!authenticatePacket.secret().equals(session.secret())) {
+                debug("Ignored Simple Voice Chat auth with mismatched secret from " + session.playerName() + ".");
+                return;
+            }
             sendUdpPacket(new SimplePacket(SimpleVoiceChatPacketType.AUTHENTICATE_ACK), session);
             debug("Authenticated Simple Voice Chat UDP session for " + session.playerName() + ".");
         } else if (envelope.packet() instanceof SimplePacket simplePacket
@@ -328,7 +393,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
         }
     }
 
-    private void sendUdpPacket(SimplePacket packet, SimpleVoiceChatClientSession session) throws Exception {
+    private void sendUdpPacket(SimpleVoiceChatUdpPacket packet, SimpleVoiceChatClientSession session) throws Exception {
         byte[] encoded = udpCodec.encodeServer(packet, session.secret());
         DatagramPacket datagram = new DatagramPacket(encoded, encoded.length);
         datagram.setSocketAddress(session.remoteAddress());

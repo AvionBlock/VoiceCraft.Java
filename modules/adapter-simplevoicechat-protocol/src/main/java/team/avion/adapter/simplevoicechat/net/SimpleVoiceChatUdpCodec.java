@@ -40,6 +40,9 @@ public final class SimpleVoiceChatUdpCodec {
     private SimpleVoiceChatUdpPacket readPacket(SimpleVoiceChatPacketType type, SimpleVoiceChatBuffer input) {
         return switch (type) {
             case MIC -> new MicPacket(input.readByteArray(MicPacket.MAX_OPUS_PAYLOAD_SIZE), input.readLong(), input.readBoolean());
+            case PLAYER_SOUND -> new PlayerSoundPacket(input.readUuid(), input.readUuid(),
+                    input.readByteArray(MicPacket.MAX_OPUS_PAYLOAD_SIZE), input.readLong(), false,
+                    Float.intBitsToFloat(input.readInt()));
             case AUTHENTICATE -> {
                 UUID playerId = input.readUuid();
                 yield new AuthenticatePacket(playerId, SimpleVoiceChatSecret.of(input.readBytes(SimpleVoiceChatSecret.SECRET_BYTES)));
@@ -53,6 +56,17 @@ public final class SimpleVoiceChatUdpCodec {
             output.writeByteArray(micPacket.data());
             output.writeLong(micPacket.sequenceNumber());
             output.writeBoolean(micPacket.whispering());
+        } else if (packet instanceof PlayerSoundPacket playerSoundPacket) {
+            output.writeUuid(playerSoundPacket.channelId());
+            output.writeUuid(playerSoundPacket.sender());
+            output.writeByteArray(playerSoundPacket.data());
+            output.writeLong(playerSoundPacket.sequenceNumber());
+            output.writeInt(Float.floatToIntBits(playerSoundPacket.distance()));
+            byte flags = 0;
+            if (playerSoundPacket.whispering()) {
+                flags |= 0b1;
+            }
+            output.writeByte(flags);
         } else if (packet instanceof AuthenticatePacket authenticatePacket) {
             output.writeUuid(authenticatePacket.playerId());
             output.writeBytes(authenticatePacket.secret().value());

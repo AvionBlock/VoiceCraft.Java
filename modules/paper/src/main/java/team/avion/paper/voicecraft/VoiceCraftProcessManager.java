@@ -35,6 +35,8 @@ public class VoiceCraftProcessManager {
     private final VoiceCraftJava plugin;
 
     private Process process;
+    private Thread stdoutLogPump;
+    private Thread stderrLogPump;
 
     public VoiceCraftProcessManager(VoiceCraftJava plugin) {
         this.plugin = plugin;
@@ -59,12 +61,15 @@ public class VoiceCraftProcessManager {
             ManagedConfigSyncResult initialSync = syncManagedServerProperties(launchTarget.installDirectory());
 
             if (process != null && process.isAlive()) {
+                ensureLogPumps(process);
                 if (initialSync.changed()) {
                     restartManagedProcess(launchTarget, "Managed VoiceCraft config changed, restarting process...");
                 }
                 return;
             }
             if (isEndpointReachable()) {
+                plugin.Logger.warn("VoiceCraft endpoint is already reachable, but it was not started by this plugin. "
+                        + "Executable stdout/stderr cannot be attached for external processes.");
                 return;
             }
 
@@ -113,8 +118,7 @@ public class VoiceCraftProcessManager {
 
         plugin.Logger.info("Starting managed VoiceCraft process: " + launchTarget.command());
         process = builder.start();
-        startLogPump(process.getInputStream(), false);
-        startLogPump(process.getErrorStream(), true);
+        startLogPumps(process);
         waitUntilReachable();
     }
 
@@ -139,10 +143,27 @@ public class VoiceCraftProcessManager {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
         }
+        stdoutLogPump = null;
+        stderrLogPump = null;
+    }
+
+    private void startLogPumps(Process managedProcess) {
+        stdoutLogPump = startLogPump(managedProcess.getInputStream(), false);
+        stderrLogPump = startLogPump(managedProcess.getErrorStream(), true);
+        plugin.Logger.info("Forwarding managed VoiceCraft process stdout/stderr to the server log.");
+    }
+
+    private void ensureLogPumps(Process managedProcess) {
+        if (stdoutLogPump == null || !stdoutLogPump.isAlive()) {
+            stdoutLogPump = startLogPump(managedProcess.getInputStream(), false);
+        }
+        if (stderrLogPump == null || !stderrLogPump.isAlive()) {
+            stderrLogPump = startLogPump(managedProcess.getErrorStream(), true);
+        }
     }
 
     private Thread startLogPump(InputStream stream, boolean errorStream) {
-        Thread thread = Thread.ofVirtual().name(errorStream ? "voicecraft-stderr" : "voicecraft-stdout").start(() -> {
+        Thread thread = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -157,7 +178,9 @@ public class VoiceCraftProcessManager {
                 }
             } catch (IOException ignored) {
             }
-        });
+        }, errorStream ? "voicecraft-stderr" : "voicecraft-stdout");
+        thread.setDaemon(true);
+        thread.start();
         return thread;
     }
 

@@ -15,6 +15,7 @@ import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.adapter.AdapterContext;
 import team.avion.paper.adapters.plasmo.PaperPlasmoVoiceAdapter;
+import team.avion.paper.adapters.simplevoicechat.PaperSimpleVoiceChatAdapter;
 import team.avion.paper.commands.VoiceCommand;
 import team.avion.paper.listeners.*;
 import team.avion.paper.tasks.PositionsTask;
@@ -57,6 +58,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private @Getter PaperVoiceCraftSessionManager sessionManager;
     private @Getter PositionsTask positionsTask;
     private PaperPlasmoVoiceAdapter plasmoVoiceAdapter;
+    private PaperSimpleVoiceChatAdapter simpleVoiceChatAdapter;
 
     private BukkitTask taskRunner;
 
@@ -73,6 +75,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         voiceCraftProcessManager = new VoiceCraftProcessManager(this);
         sessionManager = new PaperVoiceCraftSessionManager(this);
         plasmoVoiceAdapter = new PaperPlasmoVoiceAdapter(this);
+        simpleVoiceChatAdapter = new PaperSimpleVoiceChatAdapter(this);
 
         lang = resolveConfiguredLanguage();
         int positionTaskInterval = getConfig().getInt("config.voice.position-update-interval-ticks", 1);
@@ -102,6 +105,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             voiceCraftProcessManager.shutdown();
         }
         stopPlasmoAdapter();
+        stopSimpleVoiceChatAdapter();
         getServer().getMessenger().unregisterOutgoingPluginChannel(this);
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
     }
@@ -152,6 +156,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
         updateSettings(proximityDistance, proximityToggle, voiceEffects);
         reloadPlasmoAdapter();
+        reloadSimpleVoiceChatAdapter();
     }
 
     /**
@@ -452,6 +457,30 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             plasmoVoiceAdapter.stop();
         } catch (Exception exception) {
             Logger.warn("Failed to stop Plasmo Voice adapter: " + exception.getMessage());
+        }
+    }
+
+    private void reloadSimpleVoiceChatAdapter() {
+        stopSimpleVoiceChatAdapter();
+        if (!getConfig().getBoolean("config.adapters.simple-voice-chat.enabled", false)) {
+            return;
+        }
+
+        try {
+            simpleVoiceChatAdapter.start(new AdapterContext(Logger, getDataFolder().toPath(), sessionManager));
+        } catch (Exception exception) {
+            Logger.error("Failed to start Simple Voice Chat adapter: " + exception.getMessage());
+        }
+    }
+
+    private void stopSimpleVoiceChatAdapter() {
+        if (simpleVoiceChatAdapter == null) {
+            return;
+        }
+        try {
+            simpleVoiceChatAdapter.stop();
+        } catch (Exception exception) {
+            Logger.warn("Failed to stop Simple Voice Chat adapter: " + exception.getMessage());
         }
     }
 }

@@ -2,6 +2,7 @@ rootProject.name = 'VoiceCraft.Java'
 include 'core'
 include 'adapter-api'
 include 'adapter-plasmo-protocol'
+include 'adapter-simplevoicechat-protocol'
 include 'paper'
 include 'velocity'
 include 'bungeecord'
@@ -9,6 +10,7 @@ include 'bungeecord'
 project(':core').projectDir = file('modules/core')
 project(':adapter-api').projectDir = file('modules/adapter-api')
 project(':adapter-plasmo-protocol').projectDir = file('modules/adapter-plasmo-protocol')
+project(':adapter-simplevoicechat-protocol').projectDir = file('modules/adapter-simplevoicechat-protocol')
 project(':paper').projectDir = file('modules/paper')
 project(':velocity').projectDir = file('modules/velocity')
 project(':bungeecord').projectDir = file('modules/bungeecord')

@@ -10,8 +10,21 @@
     plasmo:
       enabled: false # Plasmo Voiceクライアント互換を有効化
       bind-host: "0.0.0.0" # Plasmoクライアント用UDPバインドアドレス
-      advertised-host: "0.0.0.0" # クライアントへ送るホスト。0.0.0.0はMinecraftサーバーホストを使用
       port: 24454 # Plasmoクライアント用UDPポート
+      public:
+        host: "0.0.0.0" # クライアントへ送る公開ホスト。0.0.0.0はMinecraftサーバーホストを使用
+        port: 0 # クライアントへ送る公開ポート。0は上のUDPポートを使用
+    simple-voice-chat:
+      enabled: false # Simple Voice Chatクライアント互換を有効化
+      bind-host: "0.0.0.0" # Simple Voice Chatクライアント用UDPバインドアドレス
+      port: 24454 # Simple Voice Chatクライアント用UDPポート
+      public:
+        host: "" # クライアントへ送るvoice host。空ならMinecraftサーバーホストを使用
+        port: 0 # クライアントへ送る公開ポート。0は上のUDPポートを使用
+      compatibility-version: 20 # Simple Voice Chat互換バージョン
+      mtu-size: 1024 # 受信Opusペイロード最大サイズ
+      keep-alive-ms: 1000 # UDP keep-alive間隔
+      allow-recording: true # 録音を許可するかをクライアントへ通知
 
   voicecraft:
     transport:

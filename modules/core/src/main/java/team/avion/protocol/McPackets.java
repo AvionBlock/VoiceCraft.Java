@@ -3,6 +3,7 @@ package team.avion.protocol;
 import team.avion.protocol.McProtocolEnums.CreateEntityResponseCode;
 import team.avion.protocol.McProtocolEnums.DestroyEntityResponseCode;
 import team.avion.protocol.McProtocolEnums.EffectType;
+import team.avion.protocol.McProtocolEnums.EventType;
 import team.avion.protocol.McProtocolEnums.McApiPacketType;
 import team.avion.protocol.McProtocolEnums.PositioningType;
 import team.avion.protocol.McProtocolEnums.ResetResponseCode;
@@ -157,37 +158,12 @@ public final class McPackets {
         public int Id;
         public float Loudness;
         public long LastSpoke;
-        public String WorldId = "";
-        public String Name = "";
-        public boolean Muted;
-        public boolean Deafened;
-        public int TalkBitmask;
-        public int ListenBitmask;
-        public int EffectBitmask;
-        public Vector3 Position = new Vector3(0, 0, 0);
-        public Vector2 Rotation = new Vector2(0, 0);
-        public float CaveFactor;
-        public float MuffleFactor;
 
         @Override
         public void serialize(NetDataWriter writer) {
             writer.putInt(Id);
             writer.putFloat(Loudness);
             writer.putLong(LastSpoke);
-            writer.putString(WorldId, McProtocolConstants.MAX_STRING_LENGTH);
-            writer.putString(Name, McProtocolConstants.MAX_STRING_LENGTH);
-            writer.putBool(Muted);
-            writer.putBool(Deafened);
-            writer.putUshort(TalkBitmask);
-            writer.putUshort(ListenBitmask);
-            writer.putUshort(EffectBitmask);
-            writer.putFloat(Position.x());
-            writer.putFloat(Position.y());
-            writer.putFloat(Position.z());
-            writer.putFloat(Rotation.x());
-            writer.putFloat(Rotation.y());
-            writer.putFloat(CaveFactor);
-            writer.putFloat(MuffleFactor);
         }
 
         @Override
@@ -195,17 +171,6 @@ public final class McPackets {
             Id = reader.getInt();
             Loudness = reader.getFloat();
             LastSpoke = reader.getLong();
-            WorldId = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
-            Name = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
-            Muted = reader.getBool();
-            Deafened = reader.getBool();
-            TalkBitmask = reader.getUshort();
-            ListenBitmask = reader.getUshort();
-            EffectBitmask = reader.getUshort();
-            Position = new Vector3(reader.getFloat(), reader.getFloat(), reader.getFloat());
-            Rotation = new Vector2(reader.getFloat(), reader.getFloat());
-            CaveFactor = reader.getFloat();
-            MuffleFactor = reader.getFloat();
         }
     }
 
@@ -360,6 +325,7 @@ public final class McPackets {
         public String RequestId = "";
         public String Token = "";
         public Version Version = VoiceCraftProtocol.VERSION;
+        public EventType[] SubscribeEvents = new EventType[0];
 
         @Override
         public McApiPacketType packetType() {
@@ -378,6 +344,10 @@ public final class McPackets {
             writer.putInt(Version.major());
             writer.putInt(Version.minor());
             writer.putInt(Version.build());
+            writer.putInt(SubscribeEvents.length);
+            for (EventType eventType : SubscribeEvents) {
+                writer.putByte(eventType.ordinal());
+            }
         }
 
         @Override
@@ -385,6 +355,15 @@ public final class McPackets {
             RequestId = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
             Token = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
             Version = new Version(reader.getInt(), reader.getInt(), reader.getInt());
+            if (reader.availableBytes() == 0) {
+                SubscribeEvents = new EventType[0];
+                return;
+            }
+            int length = reader.getInt();
+            SubscribeEvents = new EventType[length];
+            for (int index = 0; index < length; index++) {
+                SubscribeEvents[index] = EventType.fromByte(reader.getByte());
+            }
         }
     }
 
@@ -487,6 +466,30 @@ public final class McPackets {
         }
     }
 
+    public static final class EventRequestPacket implements McApiPacket {
+        public EventType EventTypeValue = EventType.NONE;
+        public McApiPacket Event;
+
+        @Override
+        public McApiPacketType packetType() {
+            return McApiPacketType.EVENT_REQUEST;
+        }
+
+        @Override
+        public void serialize(NetDataWriter writer) {
+            writer.putByte(EventTypeValue.ordinal());
+            if (Event != null) {
+                Event.serialize(writer);
+            }
+        }
+
+        @Override
+        public void deserialize(NetDataReader reader) {
+            EventTypeValue = EventType.fromByte(reader.getByte());
+            Event = readEvent(EventTypeValue, reader);
+        }
+    }
+
     public static final class ResetRequestPacket implements McApiPacket, RequestIdPacket {
         public String RequestId = "";
 
@@ -572,36 +575,11 @@ public final class McPackets {
         @Override
         public void serialize(NetDataWriter writer) {
             writer.putString(RequestId, McProtocolConstants.MAX_STRING_LENGTH);
-            writer.putString(WorldId, McProtocolConstants.MAX_STRING_LENGTH);
-            writer.putString(Name, McProtocolConstants.MAX_STRING_LENGTH);
-            writer.putBool(Muted);
-            writer.putBool(Deafened);
-            writer.putUshort(TalkBitmask);
-            writer.putUshort(ListenBitmask);
-            writer.putUshort(EffectBitmask);
-            writer.putFloat(Position.x());
-            writer.putFloat(Position.y());
-            writer.putFloat(Position.z());
-            writer.putFloat(Rotation.x());
-            writer.putFloat(Rotation.y());
-            writer.putFloat(CaveFactor);
-            writer.putFloat(MuffleFactor);
         }
 
         @Override
         public void deserialize(NetDataReader reader) {
             RequestId = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
-            WorldId = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
-            Name = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
-            Muted = reader.getBool();
-            Deafened = reader.getBool();
-            TalkBitmask = reader.getUshort();
-            ListenBitmask = reader.getUshort();
-            EffectBitmask = reader.getUshort();
-            Position = new Vector3(reader.getFloat(), reader.getFloat(), reader.getFloat());
-            Rotation = new Vector2(reader.getFloat(), reader.getFloat());
-            CaveFactor = reader.getFloat();
-            MuffleFactor = reader.getFloat();
         }
     }
 
@@ -896,8 +874,6 @@ public final class McPackets {
         public Guid ServerUserGuid = Guid.empty();
         public String Locale = "";
         public PositioningType PositioningTypeValue = PositioningType.SERVER;
-        public boolean ServerMuted;
-        public boolean ServerDeafened;
 
         @Override
         public McApiPacketType packetType() {
@@ -911,8 +887,6 @@ public final class McPackets {
             writer.putString(ServerUserGuid.toString(), McProtocolConstants.MAX_STRING_LENGTH);
             writer.putString(Locale, McProtocolConstants.MAX_STRING_LENGTH);
             writer.putByte(PositioningTypeValue.ordinal());
-            writer.putBool(ServerMuted);
-            writer.putBool(ServerDeafened);
         }
 
         @Override
@@ -922,8 +896,6 @@ public final class McPackets {
             ServerUserGuid = Guid.parse(reader.getString(McProtocolConstants.MAX_STRING_LENGTH));
             Locale = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
             PositioningTypeValue = McProtocolEnums.PositioningType.fromByte(reader.getByte());
-            ServerMuted = reader.getBool();
-            ServerDeafened = reader.getBool();
         }
     }
 
@@ -1093,5 +1065,67 @@ public final class McPackets {
             Timestamp = reader.getUshort();
             FrameLoudness = reader.getFloat();
         }
+    }
+
+    public static final class OnEntityAudioDataReceivedPacket implements McApiPacket {
+        public int Id;
+        public int Timestamp;
+        public float FrameLoudness;
+        public int Length;
+        public byte[] Data = new byte[0];
+
+        @Override
+        public McApiPacketType packetType() {
+            return McApiPacketType.ON_ENTITY_AUDIO_RECEIVED;
+        }
+
+        @Override
+        public void serialize(NetDataWriter writer) {
+            writer.putInt(Id);
+            writer.putUshort(Timestamp);
+            writer.putFloat(FrameLoudness);
+            writer.putBytes(Data, 0, Length);
+        }
+
+        @Override
+        public void deserialize(NetDataReader reader) {
+            Id = reader.getInt();
+            Timestamp = reader.getUshort();
+            FrameLoudness = reader.getFloat();
+            Length = reader.availableBytes();
+            if (Length > McProtocolConstants.MAXIMUM_ENCODED_BYTES) {
+                throw new IllegalStateException("Array length exceeds maximum number of bytes per packet");
+            }
+            Data = new byte[Length];
+            reader.getBytes(Data, Length);
+        }
+    }
+
+    private static McApiPacket readEvent(EventType eventType, NetDataReader reader) {
+        McApiPacket packet = switch (eventType) {
+            case ON_EFFECT_UPDATED -> new OnEffectUpdatedPacket();
+            case ON_ENTITY_CREATED -> new OnEntityCreatedPacket();
+            case ON_NETWORK_ENTITY_CREATED -> new OnNetworkEntityCreatedPacket();
+            case ON_ENTITY_DESTROYED -> new OnEntityDestroyedPacket();
+            case ON_ENTITY_VISIBILITY_UPDATED -> new OnEntityVisibilityUpdatedPacket();
+            case ON_ENTITY_WORLD_ID_UPDATED -> new OnEntityWorldIdUpdatedPacket();
+            case ON_ENTITY_NAME_UPDATED -> new OnEntityNameUpdatedPacket();
+            case ON_ENTITY_MUTE_UPDATED -> new OnEntityMuteUpdatedPacket();
+            case ON_ENTITY_DEAFEN_UPDATED -> new OnEntityDeafenUpdatedPacket();
+            case ON_ENTITY_SERVER_MUTE_UPDATED -> new OnEntityServerMuteUpdatedPacket();
+            case ON_ENTITY_SERVER_DEAFEN_UPDATED -> new OnEntityServerDeafenUpdatedPacket();
+            case ON_ENTITY_TALK_BITMASK_UPDATED -> new OnEntityTalkBitmaskUpdatedPacket();
+            case ON_ENTITY_LISTEN_BITMASK_UPDATED -> new OnEntityListenBitmaskUpdatedPacket();
+            case ON_ENTITY_EFFECT_BITMASK_UPDATED -> new OnEntityEffectBitmaskUpdatedPacket();
+            case ON_ENTITY_POSITION_UPDATED -> new OnEntityPositionUpdatedPacket();
+            case ON_ENTITY_ROTATION_UPDATED -> new OnEntityRotationUpdatedPacket();
+            case ON_ENTITY_AUDIO_RECEIVED -> new OnEntityAudioReceivedPacket();
+            case ON_ENTITY_AUDIO_DATA_RECEIVED -> new OnEntityAudioDataReceivedPacket();
+            case NONE, ON_ENTITY_PROPERTY_UPDATED -> null;
+        };
+        if (packet != null) {
+            packet.deserialize(reader);
+        }
+        return packet;
     }
 }

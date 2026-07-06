@@ -21,6 +21,7 @@ import team.avion.protocol.McPackets.DenyResponsePacket;
 import team.avion.protocol.McPackets.LoginRequestPacket;
 import team.avion.protocol.McPackets.LogoutRequestPacket;
 import team.avion.protocol.McPackets.McApiPacket;
+import team.avion.protocol.McProtocolEnums.EventType;
 
 public final class McApiTcpClient {
     private final BaseLogger logger;
@@ -61,6 +62,12 @@ public final class McApiTcpClient {
             loginPacket.RequestId = nextRequestId();
             loginPacket.Token = loginToken;
             loginPacket.Version = VoiceCraftProtocol.VERSION;
+            loginPacket.SubscribeEvents = new EventType[] {
+                    EventType.ON_NETWORK_ENTITY_CREATED,
+                    EventType.ON_ENTITY_CREATED,
+                    EventType.ON_ENTITY_DESTROYED,
+                    EventType.ON_ENTITY_AUDIO_DATA_RECEIVED
+            };
 
             List<McApiPacket> responsePackets = exchangeInternal("", List.of(loginPacket));
             for (McApiPacket packet : responsePackets) {
@@ -99,7 +106,7 @@ public final class McApiTcpClient {
             close();
             return List.of();
         } catch (Exception ex) {
-            logger.error("VoiceCraft TCP request failed: " + ex.getMessage());
+            logger.error("VoiceCraft TCP request failed: " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
             close();
             return List.of();
         }

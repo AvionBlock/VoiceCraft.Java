@@ -10,8 +10,21 @@
     plasmo:
       enabled: false # Plasmo Voice-clientcompatibiliteit inschakelen
       bind-host: "0.0.0.0" # UDP-bindadres voor Plasmo-clients
-      advertised-host: "0.0.0.0" # Host voor clients; 0.0.0.0 gebruikt de Minecraft-serverhost
       port: 24454 # UDP-poort voor Plasmo-clients
+      public:
+        host: "0.0.0.0" # Publieke host voor clients; 0.0.0.0 gebruikt de Minecraft-serverhost
+        port: 0 # Publieke poort voor clients; 0 gebruikt de UDP-poort hierboven
+    simple-voice-chat:
+      enabled: false # Simple Voice Chat-clientcompatibiliteit inschakelen
+      bind-host: "0.0.0.0" # UDP-bindadres voor Simple Voice Chat-clients
+      port: 24454 # UDP-poort voor Simple Voice Chat-clients
+      public:
+        host: "" # Voice host voor clients; leeg gebruikt de Minecraft-serverhost
+        port: 0 # Publieke poort voor clients; 0 gebruikt de UDP-poort hierboven
+      compatibility-version: 20 # Simple Voice Chat-compatibiliteitsversie
+      mtu-size: 1024 # Maximale inkomende Opus-payload
+      keep-alive-ms: 1000 # UDP keep-alive-interval
+      allow-recording: true # Vertel clients of opnemen is toegestaan
 
   voicecraft:
     transport:

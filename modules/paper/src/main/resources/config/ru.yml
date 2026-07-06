@@ -10,8 +10,21 @@
     plasmo:
       enabled: false # Включить совместимость с клиентом Plasmo Voice
       bind-host: "0.0.0.0" # UDP-адрес для Plasmo-клиентов
-      advertised-host: "0.0.0.0" # Хост для клиентов; 0.0.0.0 означает адрес Minecraft-сервера
       port: 24454 # UDP-порт для Plasmo-клиентов
+      public:
+        host: "0.0.0.0" # Публичный хост для клиентов; 0.0.0.0 означает адрес Minecraft-сервера
+        port: 0 # Публичный порт для клиентов; 0 использует UDP-порт выше
+    simple-voice-chat:
+      enabled: false # Включить совместимость с клиентом Simple Voice Chat
+      bind-host: "0.0.0.0" # UDP-адрес для клиентов Simple Voice Chat
+      port: 24454 # UDP-порт для клиентов Simple Voice Chat
+      public:
+        host: "" # Voice host для клиентов; пусто означает адрес Minecraft-сервера
+        port: 0 # Публичный порт для клиентов; 0 использует UDP-порт выше
+      compatibility-version: 20 # Версия совместимости Simple Voice Chat
+      mtu-size: 1024 # Максимальный размер входящего Opus-пакета
+      keep-alive-ms: 1000 # Интервал UDP keep-alive
+      allow-recording: true # Сообщать клиентам, что запись разрешена
 
   voicecraft:
     transport:

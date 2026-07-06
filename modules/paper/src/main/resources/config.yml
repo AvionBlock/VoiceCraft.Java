@@ -10,8 +10,21 @@
     plasmo:
       enabled: false
       bind-host: "0.0.0.0"
-      advertised-host: "0.0.0.0"
       port: 24454
+      public:
+        host: "0.0.0.0"
+        port: 0
+    simple-voice-chat:
+      enabled: false
+      bind-host: "0.0.0.0"
+      port: 24454
+      public:
+        host: ""
+        port: 0
+      compatibility-version: 20
+      mtu-size: 1024
+      keep-alive-ms: 1000
+      allow-recording: true
 
   voicecraft:
     transport:

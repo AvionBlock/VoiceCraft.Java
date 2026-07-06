@@ -1,0 +1,5 @@
+description = 'Simple Voice Chat wire protocol support for VoiceCraft.Java adapters.'
+
+dependencies {
+    api project(':adapter-api')
+}

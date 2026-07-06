@@ -22,6 +22,7 @@ import team.avion.protocol.McPackets.CreateEntityResponsePacket;
 import team.avion.protocol.McPackets.DenyResponsePacket;
 import team.avion.protocol.McPackets.DestroyEntityRequestPacket;
 import team.avion.protocol.McPackets.EntityAudioRequestPacket;
+import team.avion.protocol.McPackets.EventRequestPacket;
 import team.avion.protocol.McPackets.McApiPacket;
 import team.avion.protocol.McPackets.OnEntityDestroyedPacket;
 import team.avion.protocol.McPackets.OnNetworkEntityCreatedPacket;
@@ -29,10 +30,8 @@ import team.avion.protocol.McPackets.PingRequestPacket;
 import team.avion.protocol.McPackets.ProximityEffect;
 import team.avion.protocol.McPackets.SetEntityDeafenRequestPacket;
 import team.avion.protocol.McPackets.SetEffectRequestPacket;
-import team.avion.protocol.McPackets.SetEntityCaveFactorRequestPacket;
 import team.avion.protocol.McPackets.SetEntityDescriptionRequestPacket;
 import team.avion.protocol.McPackets.SetEntityEffectBitmaskRequestPacket;
-import team.avion.protocol.McPackets.SetEntityMuffleFactorRequestPacket;
 import team.avion.protocol.McPackets.SetEntityMuteRequestPacket;
 import team.avion.protocol.McPackets.SetEntityNameRequestPacket;
 import team.avion.protocol.McPackets.SetEntityPositionRequestPacket;
@@ -59,6 +58,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private int proximityDistance = 30;
     private boolean proximityToggle = true;
     private boolean voiceEffects = true;
+    private String lastCreateEntityFailure = "";
 
     public PaperVoiceCraftSessionManager(VoiceCraftJava plugin) {
         this.plugin = plugin;
@@ -113,12 +113,19 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         return boundEntity == null ? OptionalInt.empty() : OptionalInt.of(boundEntity.entityId());
     }
 
+    public synchronized String getLastCreateEntityFailure() {
+        return lastCreateEntityFailure;
+    }
+
     public synchronized OptionalInt createEntityForPlayer(Player player) {
+        lastCreateEntityFailure = "";
+
         BoundEntity existing = boundEntitiesByPlayerName.get(player.getName());
         if (existing != null) {
             return OptionalInt.of(existing.entityId());
         }
         if (!client.isConnected()) {
+            lastCreateEntityFailure = "VoiceCraft TCP client is not connected";
             return OptionalInt.empty();
         }
 
@@ -135,20 +142,43 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         request.Position = new Vector3((float) player.getLocation().getX(), (float) player.getLocation().getY(),
                 (float) player.getLocation().getZ());
         request.Rotation = new Vector2(player.getLocation().getPitch(), player.getLocation().getYaw());
-        request.CaveFactor = voiceEffects ? (float) plugin.getPositionsTask().getCaveDensity(player) : 0.0f;
-        request.MuffleFactor = voiceEffects && player.isInWater() ? 1.0f : 0.0f;
 
+        boolean sawCreateResponse = false;
+        List<String> unexpectedResponses = new ArrayList<>();
         for (McApiPacket response : client.exchange(List.of(request))) {
-            if (response instanceof CreateEntityResponsePacket created
-                    && requestId.equals(created.RequestId)
-                    && created.ResponseCode == CreateEntityResponseCode.OK) {
-                boundEntitiesByPlayerName.put(player.getName(), new BoundEntity(player.getName(), created.Id,
-                        player.getUniqueId().toString(), player.getUniqueId().toString(), "java",
-                        getDimensionId(player), getCurrentEffectBitmask()));
-                plugin.getPlayerBinds().put(player.getName(), true);
-                return OptionalInt.of(created.Id);
+            if (response instanceof CreateEntityResponsePacket created) {
+                if (!requestId.equals(created.RequestId)) {
+                    unexpectedResponses.add("CREATE_ENTITY_RESPONSE with mismatched request id " + created.RequestId);
+                    processPackets(List.of(response));
+                    continue;
+                }
+
+                sawCreateResponse = true;
+                if (created.ResponseCode == CreateEntityResponseCode.OK) {
+                    initializeCreatedEntity(created.Id, player);
+                    boundEntitiesByPlayerName.put(player.getName(), new BoundEntity(player.getName(), created.Id,
+                            player.getUniqueId().toString(), player.getUniqueId().toString(), "java",
+                            getDimensionId(player), getCurrentEffectBitmask()));
+                    plugin.getPlayerBinds().put(player.getName(), true);
+                    return OptionalInt.of(created.Id);
+                }
+
+                lastCreateEntityFailure = "VoiceCraft returned " + created.ResponseCode + " for request " + requestId;
+                continue;
             }
+            unexpectedResponses.add(response.packetType().name());
             processPackets(List.of(response));
+        }
+
+        if (lastCreateEntityFailure.isBlank()) {
+            if (!client.isConnected()) {
+                lastCreateEntityFailure = "VoiceCraft TCP client disconnected while creating entity";
+            } else if (!sawCreateResponse) {
+                lastCreateEntityFailure = unexpectedResponses.isEmpty()
+                        ? "VoiceCraft returned no packets for create entity request " + requestId
+                        : "VoiceCraft returned no matching create response for request " + requestId
+                                + "; received " + String.join(", ", unexpectedResponses);
+            }
         }
         return OptionalInt.empty();
     }
@@ -226,10 +256,6 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                     new Vector3((float) snapshot.x(), (float) snapshot.y(), (float) snapshot.z())));
             packets.add(vector2Packet(new SetEntityRotationRequestPacket(), boundEntity.entityId(),
                     new Vector2(0.0f, (float) snapshot.rotation())));
-            packets.add(floatPacket(new SetEntityCaveFactorRequestPacket(), boundEntity.entityId(),
-                    voiceEffects ? (float) snapshot.echoFactor() : 0.0f));
-            packets.add(floatPacket(new SetEntityMuffleFactorRequestPacket(), boundEntity.entityId(),
-                    voiceEffects && snapshot.muffled() ? 1.0f : 0.0f));
         }
 
         processPackets(client.exchange(packets));
@@ -316,6 +342,12 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
     private void processPackets(List<McApiPacket> packets) {
         for (McApiPacket packet : packets) {
+            if (packet instanceof EventRequestPacket eventRequest) {
+                if (eventRequest.Event != null) {
+                    processPackets(List.of(eventRequest.Event));
+                }
+                continue;
+            }
             if (packet instanceof AcceptResponsePacket || packet instanceof DenyResponsePacket) {
                 continue;
             }
@@ -375,10 +407,6 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                         (float) player.getLocation().getZ())));
         packets.add(vector2Packet(new SetEntityRotationRequestPacket(), pendingEntity.entityId(),
                 new Vector2(player.getLocation().getPitch(), player.getLocation().getYaw())));
-        packets.add(floatPacket(new SetEntityCaveFactorRequestPacket(), pendingEntity.entityId(),
-                voiceEffects ? (float) plugin.getPositionsTask().getCaveDensity(player) : 0.0f));
-        packets.add(floatPacket(new SetEntityMuffleFactorRequestPacket(), pendingEntity.entityId(),
-                voiceEffects && player.isInWater() ? 1.0f : 0.0f));
 
         processPackets(client.exchange(packets));
         if (!client.isConnected()) {
@@ -408,8 +436,6 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                 new Vector3(0.0f, 0.0f, 0.0f)));
         packets.add(vector2Packet(new SetEntityRotationRequestPacket(), pendingEntity.entityId(),
                 new Vector2(0.0f, 0.0f)));
-        packets.add(floatPacket(new SetEntityCaveFactorRequestPacket(), pendingEntity.entityId(), 0.0f));
-        packets.add(floatPacket(new SetEntityMuffleFactorRequestPacket(), pendingEntity.entityId(), 0.0f));
 
         processPackets(client.exchange(packets));
         if (!client.isConnected()) {
@@ -434,6 +460,21 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), pendingEntity.entityId(), ""));
         packets.add(stringPacket(new SetEntityDescriptionRequestPacket(), pendingEntity.entityId(),
                 "Welcome! Your binding key is " + bindingKey));
+        processPackets(client.exchange(packets));
+    }
+
+    private void initializeCreatedEntity(int entityId, Player player) {
+        List<McApiPacket> packets = new ArrayList<>();
+        packets.add(stringPacket(new SetEntityNameRequestPacket(), entityId, player.getName()));
+        packets.add(stringPacket(new SetEntityDescriptionRequestPacket(), entityId,
+                "Plasmo client " + player.getName()));
+        packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), entityId, getDimensionId(player)));
+        packets.add(intPacket(new SetEntityEffectBitmaskRequestPacket(), entityId, getCurrentEffectBitmask()));
+        packets.add(vector3Packet(new SetEntityPositionRequestPacket(), entityId,
+                new Vector3((float) player.getLocation().getX(), (float) player.getLocation().getY(),
+                        (float) player.getLocation().getZ())));
+        packets.add(vector2Packet(new SetEntityRotationRequestPacket(), entityId,
+                new Vector2(player.getLocation().getPitch(), player.getLocation().getYaw())));
         processPackets(client.exchange(packets));
     }
 
@@ -516,20 +557,6 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
     private static SetEntityRotationRequestPacket vector2Packet(SetEntityRotationRequestPacket packet, int entityId,
             Vector2 value) {
-        packet.Id = entityId;
-        packet.Value = value;
-        return packet;
-    }
-
-    private static SetEntityCaveFactorRequestPacket floatPacket(SetEntityCaveFactorRequestPacket packet, int entityId,
-            float value) {
-        packet.Id = entityId;
-        packet.Value = value;
-        return packet;
-    }
-
-    private static SetEntityMuffleFactorRequestPacket floatPacket(SetEntityMuffleFactorRequestPacket packet, int entityId,
-            float value) {
         packet.Id = entityId;
         packet.Value = value;
         return packet;

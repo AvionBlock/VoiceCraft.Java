@@ -21,9 +21,12 @@ import team.avion.adapter.plasmo.tcp.packet.ConnectionPacket;
 import team.avion.adapter.plasmo.tcp.packet.LanguagePacket;
 import team.avion.adapter.plasmo.tcp.packet.LanguageRequestPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerActivationDistancesPacket;
+import team.avion.adapter.plasmo.tcp.packet.PlayerAudioEndPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerInfoPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerInfoRequestPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerListPacket;
+import team.avion.adapter.plasmo.tcp.packet.PlayerStatePacket;
+import team.avion.adapter.plasmo.tcp.packet.SourceInfoRequestPacket;
 import team.avion.adapter.plasmo.udp.PlasmoUdpCodec;
 import team.avion.adapter.plasmo.udp.PlasmoUdpCodecs;
 import team.avion.adapter.plasmo.udp.PlasmoUdpEnvelope;
@@ -56,8 +59,9 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
     private DatagramSocket udpSocket;
     private Thread udpThread;
     private String bindHost;
-    private String advertisedHost;
+    private String publicHost;
     private int udpPort;
+    private int publicPort;
     private int proximityDistance;
     private boolean debug;
 
@@ -89,8 +93,11 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
         state = AdapterState.STARTING;
         this.sessions = new PlasmoSessionManager(context.audioBridge());
         this.bindHost = plugin.getConfig().getString("config.adapters.plasmo.bind-host", "0.0.0.0");
-        this.advertisedHost = plugin.getConfig().getString("config.adapters.plasmo.advertised-host", "0.0.0.0");
         this.udpPort = plugin.getConfig().getInt("config.adapters.plasmo.port", 24454);
+        this.publicHost = plugin.getConfig().getString("config.adapters.plasmo.public.host",
+                plugin.getConfig().getString("config.adapters.plasmo.advertised-host", "0.0.0.0"));
+        int configuredPublicPort = plugin.getConfig().getInt("config.adapters.plasmo.public.port", 0);
+        this.publicPort = configuredPublicPort > 0 ? configuredPublicPort : udpPort;
         this.proximityDistance = plugin.getConfig().getInt("config.voice.proximity-distance", 30);
         this.debug = plugin.getConfig().getBoolean("config.debug", false);
 
@@ -107,7 +114,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         state = AdapterState.RUNNING;
         plugin.Logger.info("Plasmo Voice adapter listening on " + bindHost + ":" + udpPort
-                + " and advertising " + advertisedHost + ":" + udpPort + ".");
+                + " and advertising " + publicHost + ":" + publicPort + ".");
     }
 
     @Override
@@ -150,6 +157,15 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
                 sendTcpPacket(player, new LanguagePacket(languageRequest.language(), Map.of()));
             } else if (packet instanceof PlayerActivationDistancesPacket) {
                 // Client-side distance preferences are accepted but currently mapped to VoiceCraft proximity settings.
+            } else if (packet instanceof PlayerAudioEndPacket audioEndPacket) {
+                debug("Plasmo client " + player.getName() + " ended audio sequence="
+                        + audioEndPacket.sequenceNumber() + ".");
+            } else if (packet instanceof PlayerStatePacket statePacket) {
+                debug("Plasmo client " + player.getName() + " state voiceDisabled="
+                        + statePacket.voiceDisabled() + " microphoneMuted=" + statePacket.microphoneMuted() + ".");
+            } else if (packet instanceof SourceInfoRequestPacket sourceInfoRequest) {
+                debug("Plasmo client " + player.getName() + " requested source info "
+                        + sourceInfoRequest.sourceId() + ".");
             }
         } catch (Exception exception) {
             plugin.Logger.warn("Failed to decode Plasmo packet from " + player.getName() + ": " + exception.getMessage());
@@ -191,14 +207,16 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, PluginMessag
 
         OptionalInt entityId = plugin.getSessionManager().createEntityForPlayer(player);
         if (entityId.isEmpty()) {
-            plugin.Logger.warn("Failed to create VoiceCraft entity for Plasmo client " + player.getName() + ".");
+            String reason = plugin.getSessionManager().getLastCreateEntityFailure();
+            plugin.Logger.warn("Failed to create VoiceCraft entity for Plasmo client " + player.getName()
+                    + (reason.isBlank() ? "." : ": " + reason + "."));
             return;
         }
 
         PlasmoClientSession session = sessions.createOrReplace(player.getUniqueId(), player.getName(), entityId.getAsInt());
         debug("Created Plasmo session for " + player.getName() + " entity=" + entityId.getAsInt()
-                + " secret=" + session.udpSecret() + " endpoint=" + advertisedHost + ":" + udpPort + ".");
-        sendTcpPacket(player, new ConnectionPacket(session.udpSecret(), advertisedHost, udpPort));
+                + " secret=" + session.udpSecret() + " endpoint=" + publicHost + ":" + publicPort + ".");
+        sendTcpPacket(player, new ConnectionPacket(session.udpSecret(), publicHost, publicPort));
     }
 
     private void runUdpLoop() {

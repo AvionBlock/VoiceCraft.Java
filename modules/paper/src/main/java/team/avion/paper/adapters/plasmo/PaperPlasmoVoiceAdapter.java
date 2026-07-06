@@ -11,10 +11,14 @@ import team.avion.adapter.AdapterContext;
 import team.avion.adapter.AdapterState;
 import team.avion.adapter.VoiceAdapter;
 import team.avion.adapter.VoiceCraftAudioSink;
+import team.avion.adapter.VoiceCraftEntityIdentity;
+import team.avion.adapter.VoiceCraftIdentityListener;
 import team.avion.adapter.plasmo.PlasmoChannels;
 import team.avion.adapter.plasmo.PlasmoPacket;
+import team.avion.adapter.plasmo.data.McGameProfile;
 import team.avion.adapter.plasmo.data.PlayerSourceInfo;
 import team.avion.adapter.plasmo.data.VoicePlayerInfo;
+import team.avion.adapter.plasmo.data.VoiceSourceLine;
 import team.avion.adapter.plasmo.session.PlasmoClientSession;
 import team.avion.adapter.plasmo.session.PlasmoSessionManager;
 import team.avion.adapter.plasmo.tcp.PlasmoTcpCodec;
@@ -25,12 +29,17 @@ import team.avion.adapter.plasmo.tcp.packet.LanguagePacket;
 import team.avion.adapter.plasmo.tcp.packet.LanguageRequestPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerActivationDistancesPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerAudioEndPacket;
+import team.avion.adapter.plasmo.tcp.packet.PlayerDisconnectPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerInfoPacket;
+import team.avion.adapter.plasmo.tcp.packet.PlayerInfoUpdatePacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerInfoRequestPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerListPacket;
 import team.avion.adapter.plasmo.tcp.packet.PlayerStatePacket;
+import team.avion.adapter.plasmo.tcp.packet.SourceAudioEndPacket;
 import team.avion.adapter.plasmo.tcp.packet.SourceInfoPacket;
 import team.avion.adapter.plasmo.tcp.packet.SourceInfoRequestPacket;
+import team.avion.adapter.plasmo.tcp.packet.SourceLinePlayersListPacket;
+import team.avion.adapter.plasmo.tcp.packet.SourceLineRegisterPacket;
 import team.avion.adapter.plasmo.udp.PlasmoUdpCodec;
 import team.avion.adapter.plasmo.udp.PlasmoUdpCodecs;
 import team.avion.adapter.plasmo.udp.PlasmoUdpEnvelope;
@@ -45,6 +54,8 @@ import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.Map;
@@ -52,10 +63,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAudioSink, PluginMessageListener, Listener {
+public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAudioSink, VoiceCraftIdentityListener,
+        PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_INTERVAL_MS = 1000L;
     private static final long KEEP_ALIVE_TIMEOUT_MS = 30000L;
     private static final byte SOURCE_STATE = 1;
+    private static final String SOURCE_LINE_TRANSLATION = "pv.activation.proximity";
 
     private final VoiceCraftJava plugin;
     private final PlasmoTcpCodec tcpCodec = PlasmoTcpCodecs.createBaseCodec();
@@ -64,6 +77,8 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Map<UUID, PlayerSourceInfo> sourcesById = new ConcurrentHashMap<>();
     private final Map<Integer, PlayerSourceInfo> sourcesByEntityId = new ConcurrentHashMap<>();
+    private final Map<Integer, Long> sourceSequencesByEntity = new ConcurrentHashMap<>();
+    private final Map<UUID, PlasmoPlayerState> playerStatesById = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> sentSourcesByReceiver = new ConcurrentHashMap<>();
 
     private AdapterState state = AdapterState.NEW;
@@ -77,6 +92,11 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     private int publicPort;
     private int proximityDistance;
     private boolean debug;
+    private long audioDebugWindowMillis;
+    private int receivedAudioFrames;
+    private int receivedAudioBytes;
+    private int forwardedAudioFrames;
+    private int forwardedAudioBytes;
 
     public PaperPlasmoVoiceAdapter(VoiceCraftJava plugin) {
         this.plugin = plugin;
@@ -127,6 +147,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, PlasmoChannels.MAIN, this);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         context.audioBridge().registerAudioSink(this);
+        context.audioBridge().registerIdentityListener(this);
         state = AdapterState.RUNNING;
         plugin.Logger.info("Plasmo Voice adapter listening on " + bindHost + ":" + udpPort
                 + " and advertising " + publicHost + ":" + publicPort + ".");
@@ -146,6 +167,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, PlasmoChannels.FLAG);
         if (context != null) {
             context.audioBridge().unregisterAudioSink(this);
+            context.audioBridge().unregisterIdentityListener(this);
         }
 
         if (udpSocket != null) {
@@ -173,7 +195,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 sourceInfo.sourceId(),
                 sourceInfo.state(),
                 (short) Math.max(0, Math.min(Short.MAX_VALUE, proximityDistance)),
-                Integer.toUnsignedLong(timestamp),
+                nextPlasmoSequence(entityId),
                 opusFrame
         );
 
@@ -187,13 +209,60 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             try {
                 sendSourceInfoIfNeeded(receiver, sourceInfo);
                 sendUdpPacket(packet, receiver.udpSecret(), receiver.remoteAddress());
-                debug("Forwarded VoiceCraft audio entity=" + entityId + " source=" + sourceInfo.playerInfo().playerNick()
-                        + " to " + receiver.playerName() + " bytes=" + opusFrame.length + ".");
+                debugForwardedAudio(opusFrame.length);
             } catch (Exception exception) {
                 plugin.Logger.warn("Failed to forward Plasmo audio to " + receiver.playerName()
                         + ": " + exception.getMessage());
             }
         }
+    }
+
+    @Override
+    public void receiveEntityAudioEnd(int entityId, long sequenceNumber) {
+        if (!running.get()) {
+            return;
+        }
+
+        PlasmoClientSession sourceSession = sessions.byEntityId(entityId).orElse(null);
+        PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId, sourceSession);
+        SourceAudioEndPacket packet = new SourceAudioEndPacket(sourceInfo.sourceId(), nextPlasmoSequence(entityId));
+
+        for (PlasmoClientSession receiver : sessions.sessions()) {
+            if (receiver.playerId().equals(sourceInfo.sourceId())) {
+                continue;
+            }
+            Player player = plugin.getServer().getPlayer(receiver.playerId());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            sendTcpPacket(player, packet);
+        }
+    }
+
+    @Override
+    public void entityIdentityRegistered(VoiceCraftEntityIdentity identity) {
+        if (!running.get() || !plugin.isEnabled()) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            PlayerSourceInfo sourceInfo = sourceInfoForEntity(identity.entityId(),
+                    sessions.byPlayerId(identity.playerId()).orElse(null));
+            broadcastPlayerInfo(voicePlayerInfo(identity));
+            sendSourceInfoToConfiguredPlayers(sourceInfo);
+        });
+    }
+
+    @Override
+    public void entityIdentityUnregistered(VoiceCraftEntityIdentity identity) {
+        if (!running.get() || !plugin.isEnabled()) {
+            return;
+        }
+        sourcesByEntityId.remove(identity.entityId());
+        sourcesById.remove(identity.playerId());
+        sourceSequencesByEntity.remove(identity.entityId());
+        playerStatesById.remove(identity.playerId());
+        sentSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(identity.playerId()));
+        plugin.getServer().getScheduler().runTask(plugin, () -> broadcastPlayerDisconnect(identity.playerId()));
     }
 
     @Override
@@ -207,15 +276,25 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             if (packet instanceof PlayerInfoPacket infoPacket) {
                 handlePlayerInfo(player, infoPacket);
             } else if (packet instanceof LanguageRequestPacket languageRequest) {
-                sendTcpPacket(player, new LanguagePacket(languageRequest.language(), Map.of()));
+                sendTcpPacket(player, new LanguagePacket(languageRequest.language(), Map.of(
+                        "pv.activation.proximity", "Proximity"
+                )));
             } else if (packet instanceof PlayerActivationDistancesPacket) {
                 // Client-side distance preferences are accepted but currently mapped to VoiceCraft proximity settings.
             } else if (packet instanceof PlayerAudioEndPacket audioEndPacket) {
                 debug("Plasmo client " + player.getName() + " ended audio sequence="
                         + audioEndPacket.sequenceNumber() + ".");
+                sessions.forwardAudioEnd(player.getUniqueId(), audioEndPacket.sequenceNumber());
             } else if (packet instanceof PlayerStatePacket statePacket) {
                 debug("Plasmo client " + player.getName() + " state voiceDisabled="
                         + statePacket.voiceDisabled() + " microphoneMuted=" + statePacket.microphoneMuted() + ".");
+                playerStatesById.put(player.getUniqueId(), new PlasmoPlayerState(
+                        statePacket.voiceDisabled(),
+                        statePacket.microphoneMuted()
+                ));
+                sessions.byPlayerId(player.getUniqueId())
+                        .flatMap(session -> context.audioBridge().entityIdentity(session.voiceCraftEntityId()))
+                        .ifPresent(identity -> broadcastPlayerInfo(voicePlayerInfo(identity)));
             } else if (packet instanceof SourceInfoRequestPacket sourceInfoRequest) {
                 debug("Plasmo client " + player.getName() + " requested source info "
                         + sourceInfoRequest.sourceId() + ".");
@@ -234,6 +313,9 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (!PlasmoChannels.MAIN.equals(event.getChannel())) {
             return;
         }
+        if (!plugin.isEnabled()) {
+            return;
+        }
 
         plugin.getServer().getScheduler().runTask(plugin, () -> requestPlayerInfo(event.getPlayer()));
     }
@@ -241,8 +323,13 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (sessions.byPlayerId(event.getPlayer().getUniqueId()).isPresent()) {
+            PlasmoClientSession session = sessions.byPlayerId(event.getPlayer().getUniqueId()).orElse(null);
             sessions.remove(event.getPlayer().getUniqueId());
+            playerStatesById.remove(event.getPlayer().getUniqueId());
             sentSourcesByReceiver.remove(event.getPlayer().getUniqueId());
+            if (session != null) {
+                context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
+            }
             plugin.getSessionManager().destroyEntityForPlayer(event.getPlayer().getName());
         }
     }
@@ -272,11 +359,13 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         }
 
         PlasmoClientSession session = sessions.createOrReplace(player.getUniqueId(), player.getName(), entityId.getAsInt());
+        playerStatesById.put(player.getUniqueId(), new PlasmoPlayerState(packet.voiceDisabled(), packet.microphoneMuted()));
+        context.audioBridge().registerEntityIdentity(new VoiceCraftEntityIdentity(entityId.getAsInt(),
+                player.getUniqueId(), player.getName(), id()));
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId.getAsInt(), session);
         debug("Created Plasmo session for " + player.getName() + " entity=" + entityId.getAsInt()
                 + " secret=" + session.udpSecret() + " endpoint=" + publicHost + ":" + publicPort + ".");
         sendTcpPacket(player, new ConnectionPacket(session.udpSecret(), publicHost, publicPort));
-        sendSourceInfoToConfiguredPlayers(sourceInfo);
     }
 
     private void runUdpLoop() {
@@ -287,7 +376,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 udpSocket.receive(datagram);
                 byte[] payload = new byte[datagram.getLength()];
                 System.arraycopy(datagram.getData(), datagram.getOffset(), payload, 0, datagram.getLength());
-                debug("Received Plasmo UDP datagram from " + datagram.getSocketAddress() + " bytes=" + payload.length + ".");
                 handleUdpDatagram(payload, datagram.getSocketAddress());
                 sendKeepAlivePackets();
             } catch (SocketTimeoutException ignored) {
@@ -304,16 +392,16 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
 
     private void handleUdpDatagram(byte[] payload, java.net.SocketAddress remoteAddress) throws IOException {
         PlasmoUdpEnvelope envelope = udpCodec.decode(payload);
-        debug("Decoded Plasmo UDP packet type=" + envelope.type() + " secret=" + envelope.secret()
-                + " from=" + remoteAddress + ".");
         if (!sessions.handleUdpPacket(envelope, remoteAddress)) {
             debug("Ignored Plasmo UDP packet with unknown secret " + envelope.secret() + ".");
             return;
         }
 
         if (envelope.packet() instanceof PingPacket) {
+            debug("Decoded Plasmo UDP packet type=" + envelope.type() + " secret=" + envelope.secret()
+                    + " from=" + remoteAddress + ".");
             sessions.bySecret(envelope.secret()).ifPresent(session ->
-                    plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    runPluginTask(() -> {
                         if (session.configSent()) {
                             return;
                         }
@@ -322,7 +410,9 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                             return;
                         }
                         sendTcpPacket(player, new ConfigPacket(serverId, proximityDistance));
-                        sendTcpPacket(player, new PlayerListPacket());
+                        sendTcpPacket(player, new SourceLineRegisterPacket(proximitySourceLine()));
+                        sendTcpPacket(player, new PlayerListPacket(voicePlayers()));
+                        sendTcpPacket(player, new SourceLinePlayersListPacket(ConfigPacket.PROXIMITY_SOURCE_LINE_ID, gameProfiles()));
                         sourcesById.values().forEach(sourceInfo -> {
                             markSourceInfoSent(session.playerId(), sourceInfo.sourceId());
                             sendTcpPacket(player, new SourceInfoPacket(sourceInfo));
@@ -331,6 +421,8 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                         debug("Sent Plasmo config/player list to " + player.getName() + ".");
                     })
             );
+        } else {
+            debugReceivedAudio(payload.length);
         }
     }
 
@@ -369,32 +461,73 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     }
 
     private PlayerSourceInfo sourceInfoForEntity(int entityId, PlasmoClientSession session) {
+        VoiceCraftEntityIdentity identity = context.audioBridge().entityIdentity(entityId)
+                .orElseGet(() -> session != null
+                        ? new VoiceCraftEntityIdentity(entityId, session.playerId(), session.playerName(), id())
+                        : new VoiceCraftEntityIdentity(entityId, syntheticSourceId(entityId),
+                                "VoiceCraft-" + entityId, "voicecraft"));
+        VoicePlayerInfo playerInfo = voicePlayerInfo(identity);
         PlayerSourceInfo existing = sourcesByEntityId.get(entityId);
-        if (existing != null) {
+        if (existing != null
+                && existing.sourceId().equals(identity.playerId())
+                && existing.playerInfo().equals(playerInfo)) {
             return existing;
         }
 
-        UUID sourceId = session != null ? session.playerId() : syntheticSourceId(entityId);
-        String name = session != null ? session.playerName() : "VoiceCraft-" + entityId;
         PlayerSourceInfo sourceInfo = new PlayerSourceInfo(
                 "voicecraft",
-                sourceId,
+                identity.playerId(),
                 ConfigPacket.PROXIMITY_SOURCE_LINE_ID,
-                name,
+                identity.playerName(),
                 SOURCE_STATE,
                 false,
                 true,
                 0,
-                new VoicePlayerInfo(sourceId, name, false, false, false)
+                playerInfo
         );
-        PlayerSourceInfo previous = sourcesByEntityId.putIfAbsent(entityId, sourceInfo);
-        PlayerSourceInfo result = previous == null ? sourceInfo : previous;
-        sourcesById.putIfAbsent(result.sourceId(), result);
-        return result;
+        sourcesByEntityId.put(entityId, sourceInfo);
+        sourcesById.put(sourceInfo.sourceId(), sourceInfo);
+        return sourceInfo;
+    }
+
+    private Collection<VoicePlayerInfo> voicePlayers() {
+        return context.audioBridge().entityIdentities()
+                .stream()
+                .map(this::voicePlayerInfo)
+                .toList();
+    }
+
+    private VoicePlayerInfo voicePlayerInfo(VoiceCraftEntityIdentity identity) {
+        PlasmoPlayerState state = playerStatesById.getOrDefault(identity.playerId(),
+                new PlasmoPlayerState(false, false));
+        return new VoicePlayerInfo(identity.playerId(), identity.playerName(), false,
+                state.voiceDisabled(), state.microphoneMuted());
+    }
+
+    private List<McGameProfile> gameProfiles() {
+        return context.audioBridge().entityIdentities()
+                .stream()
+                .map(identity -> new McGameProfile(identity.playerId(), identity.playerName()))
+                .toList();
+    }
+
+    private VoiceSourceLine proximitySourceLine() {
+        return new VoiceSourceLine(
+                ConfigPacket.PROXIMITY_NAME,
+                SOURCE_LINE_TRANSLATION,
+                "plasmovoice:textures/icons/speaker.png",
+                1.0D,
+                0,
+                gameProfiles()
+        );
     }
 
     private UUID syntheticSourceId(int entityId) {
         return UUID.nameUUIDFromBytes(("voicecraft-entity:" + entityId).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private long nextPlasmoSequence(int entityId) {
+        return sourceSequencesByEntity.merge(entityId, 1L, Long::sum);
     }
 
     private void sendSourceInfoToConfiguredPlayers(PlayerSourceInfo sourceInfo) {
@@ -403,7 +536,43 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 continue;
             }
             sendSourceInfoIfNeeded(receiver, sourceInfo);
+            sendLinePlayers(receiver);
         }
+    }
+
+    private void broadcastPlayerInfo(VoicePlayerInfo playerInfo) {
+        for (PlasmoClientSession receiver : sessions.sessions()) {
+            Player player = plugin.getServer().getPlayer(receiver.playerId());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            sendTcpPacket(player, new PlayerInfoUpdatePacket(playerInfo));
+            if (receiver.configSent()) {
+                sendLinePlayers(receiver);
+            }
+        }
+    }
+
+    private void broadcastPlayerDisconnect(UUID playerId) {
+        playerStatesById.remove(playerId);
+        for (PlasmoClientSession receiver : sessions.sessions()) {
+            Player player = plugin.getServer().getPlayer(receiver.playerId());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            sendTcpPacket(player, new PlayerDisconnectPacket(playerId));
+            if (receiver.configSent()) {
+                sendLinePlayers(receiver);
+            }
+        }
+    }
+
+    private void sendLinePlayers(PlasmoClientSession receiver) {
+        Player player = plugin.getServer().getPlayer(receiver.playerId());
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        sendTcpPacket(player, new SourceLinePlayersListPacket(ConfigPacket.PROXIMITY_SOURCE_LINE_ID, gameProfiles()));
     }
 
     private void sendSourceInfoIfNeeded(PlasmoClientSession receiver, PlayerSourceInfo sourceInfo) {
@@ -414,7 +583,14 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (player == null || !player.isOnline()) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, () -> sendTcpPacket(player, new SourceInfoPacket(sourceInfo)));
+        runPluginTask(() -> sendTcpPacket(player, new SourceInfoPacket(sourceInfo)));
+    }
+
+    private void runPluginTask(Runnable task) {
+        if (!plugin.isEnabled()) {
+            return;
+        }
+        plugin.getServer().getScheduler().runTask(plugin, task);
     }
 
     private boolean markSourceInfoSent(UUID receiverId, UUID sourceId) {
@@ -434,5 +610,45 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (debug) {
             plugin.Logger.info("[PlasmoAdapter] " + message);
         }
+    }
+
+    private void debugReceivedAudio(int bytes) {
+        if (!debug) {
+            return;
+        }
+        receivedAudioFrames++;
+        receivedAudioBytes += bytes;
+        flushAudioDebugIfNeeded();
+    }
+
+    private void debugForwardedAudio(int bytes) {
+        if (!debug) {
+            return;
+        }
+        forwardedAudioFrames++;
+        forwardedAudioBytes += bytes;
+        flushAudioDebugIfNeeded();
+    }
+
+    private void flushAudioDebugIfNeeded() {
+        long now = System.currentTimeMillis();
+        if (audioDebugWindowMillis == 0L) {
+            audioDebugWindowMillis = now;
+            return;
+        }
+        if (now - audioDebugWindowMillis < 1000L) {
+            return;
+        }
+        plugin.Logger.info("[PlasmoAdapter] Audio frames last " + (now - audioDebugWindowMillis)
+                + "ms: received=" + receivedAudioFrames + " (" + receivedAudioBytes + " bytes), forwarded="
+                + forwardedAudioFrames + " (" + forwardedAudioBytes + " bytes).");
+        audioDebugWindowMillis = now;
+        receivedAudioFrames = 0;
+        receivedAudioBytes = 0;
+        forwardedAudioFrames = 0;
+        forwardedAudioBytes = 0;
+    }
+
+    private record PlasmoPlayerState(boolean voiceDisabled, boolean microphoneMuted) {
     }
 }

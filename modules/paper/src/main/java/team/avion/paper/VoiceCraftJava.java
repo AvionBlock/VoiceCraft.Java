@@ -108,12 +108,15 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
     @Override
     public void onDisable() {
+        stopPlasmoAdapter();
+        stopSimpleVoiceChatAdapter();
         disconnect("Plugin disabled");
+        if (taskRunner != null && !taskRunner.isCancelled()) {
+            taskRunner.cancel();
+        }
         if (voiceCraftProcessManager != null) {
             voiceCraftProcessManager.shutdown();
         }
-        stopPlasmoAdapter();
-        stopSimpleVoiceChatAdapter();
         getServer().getMessenger().unregisterOutgoingPluginChannel(this);
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
     }

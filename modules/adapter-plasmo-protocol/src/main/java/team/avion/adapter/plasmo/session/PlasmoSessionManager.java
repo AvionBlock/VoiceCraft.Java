@@ -73,6 +73,13 @@ public final class PlasmoSessionManager {
         return true;
     }
 
+    public void forwardAudioEnd(UUID playerId, long sequenceNumber) {
+        PlasmoClientSession session = sessionsByPlayerId.get(playerId);
+        if (session != null) {
+            audioBridge.sendEntityAudioEnd(session.voiceCraftEntityId(), sequenceNumber);
+        }
+    }
+
     private void forwardAudio(PlasmoClientSession session, PlayerAudioPacket packet) {
         // Temporary bridge limitation; will be removed in future when loudness is derived from decoded PCM.
         float approximatedLoudness = 1.0f;

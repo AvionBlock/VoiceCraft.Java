@@ -53,6 +53,7 @@ public final class SimpleVoiceChatSessionManager {
 
     public void forwardAudio(SimpleVoiceChatClientSession session, MicPacket packet) {
         if (packet.data().length == 0) {
+            audioBridge.sendEntityAudioEnd(session.voiceCraftEntityId(), packet.sequenceNumber());
             return;
         }
         session.touch(session.remoteAddress());

@@ -17,11 +17,21 @@ public record PlayerSourceInfo(String addonId, UUID sourceId, UUID lineId, Strin
             output.writeUTF(sourceName);
         }
         output.writeByte(state);
-        output.writeBoolean(false);
+        output.writeBoolean(true);
+        writeOpusCodec(output);
         output.writeBoolean(stereo);
         PlasmoPacketUtil.writeUuid(output, lineId);
         output.writeBoolean(iconVisible);
         output.writeInt(angle);
         playerInfo.write(output);
+    }
+
+    private void writeOpusCodec(DataOutput output) throws IOException {
+        output.writeUTF("opus");
+        output.writeInt(2);
+        output.writeUTF("mode");
+        output.writeUTF("VOIP");
+        output.writeUTF("bitrate");
+        output.writeUTF("48000");
     }
 }

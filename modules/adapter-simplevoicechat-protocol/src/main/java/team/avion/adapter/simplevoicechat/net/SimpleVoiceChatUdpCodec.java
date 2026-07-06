@@ -1,11 +1,11 @@
 package team.avion.adapter.simplevoicechat.net;
 
 import java.net.SocketAddress;
-import java.util.Arrays;
 import java.util.UUID;
 
 public final class SimpleVoiceChatUdpCodec {
     public static final byte MAGIC = (byte) 0xFF;
+    public static final int MAX_VOICE_CHAT_PACKET_SIZE = 2048;
 
     public SimpleVoiceChatUdpEnvelope decodeClient(byte[] data, SocketAddress remoteAddress, SecretResolver resolver) throws Exception {
         SimpleVoiceChatBuffer outer = new SimpleVoiceChatBuffer(data);
@@ -19,7 +19,7 @@ public final class SimpleVoiceChatUdpCodec {
             throw new IllegalArgumentException("No Simple Voice Chat secret for " + playerId);
         }
 
-        byte[] encrypted = outer.readByteArray(65535);
+        byte[] encrypted = outer.readByteArray(MAX_VOICE_CHAT_PACKET_SIZE);
         SimpleVoiceChatBuffer inner = new SimpleVoiceChatBuffer(secret.decrypt(encrypted));
         SimpleVoiceChatPacketType type = SimpleVoiceChatPacketType.byId(Byte.toUnsignedInt(inner.readByte()));
         return new SimpleVoiceChatUdpEnvelope(playerId, readPacket(type, inner), remoteAddress);

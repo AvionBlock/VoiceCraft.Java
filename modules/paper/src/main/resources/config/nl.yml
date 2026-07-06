@@ -1,4 +1,6 @@
-﻿config:
+﻿config-version: 2 # NIET AANPASSEN: gebruikt voor automatische configmigraties
+
+config:
   debug: false # Extra debuglogging inschakelen
   lang: "system" # system, en, ru, nl, ja
   auto-reconnect: true # Opnieuw verbinden met VoiceCraft na verbindingsverlies
@@ -17,7 +19,7 @@
     simple-voice-chat:
       enabled: false # Simple Voice Chat-clientcompatibiliteit inschakelen
       bind-host: "0.0.0.0" # UDP-bindadres voor Simple Voice Chat-clients
-      port: 24454 # UDP-poort voor Simple Voice Chat-clients
+      port: 24455 # UDP-poort voor Simple Voice Chat-clients
       public:
         host: "" # Voice host voor clients; leeg gebruikt de Minecraft-serverhost
         port: 0 # Publieke poort voor clients; 0 gebruikt de UDP-poort hierboven

@@ -1,4 +1,6 @@
-﻿config:
+﻿config-version: 2 # DO NOT EDIT: used for automatic config migrations
+
+config:
   debug: false                   # Enable additional debug logging
   lang: "system"                 # system, en, ru, nl, ja
   auto-reconnect: true           # Reconnect to VoiceCraft after a dropped connection
@@ -17,7 +19,7 @@
     simple-voice-chat:
       enabled: false             # Enable Simple Voice Chat client compatibility
       bind-host: "0.0.0.0"       # UDP bind address for Simple Voice Chat clients
-      port: 24454                # UDP port for Simple Voice Chat clients
+      port: 24455                # UDP port for Simple Voice Chat clients
       public:
         host: ""                 # Voice host sent to clients; empty means Minecraft server host
         port: 0                  # Port sent to clients; 0 uses the UDP port above

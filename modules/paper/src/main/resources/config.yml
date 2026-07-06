@@ -1,4 +1,6 @@
-﻿config:
+﻿config-version: 2 # DO NOT EDIT: used for automatic config migrations
+
+config:
   debug: false
   lang: "system"
   auto-reconnect: true
@@ -17,7 +19,7 @@
     simple-voice-chat:
       enabled: false
       bind-host: "0.0.0.0"
-      port: 24454
+      port: 24455
       public:
         host: ""
         port: 0

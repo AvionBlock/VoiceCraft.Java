@@ -1,4 +1,6 @@
-﻿config:
+﻿config-version: 2 # 編集しないでください: configの自動移行に使用されます
+
+config:
   debug: false # 追加のデバッグログを有効化します
   lang: "system" # system, en, ru, nl, ja
   auto-reconnect: true # 切断時に VoiceCraft へ再接続します
@@ -17,7 +19,7 @@
     simple-voice-chat:
       enabled: false # Simple Voice Chatクライアント互換を有効化
       bind-host: "0.0.0.0" # Simple Voice Chatクライアント用UDPバインドアドレス
-      port: 24454 # Simple Voice Chatクライアント用UDPポート
+      port: 24455 # Simple Voice Chatクライアント用UDPポート
       public:
         host: "" # クライアントへ送るvoice host。空ならMinecraftサーバーホストを使用
         port: 0 # クライアントへ送る公開ポート。0は上のUDPポートを使用

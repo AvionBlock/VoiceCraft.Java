@@ -26,6 +26,8 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,7 +83,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
         state = AdapterState.STARTING;
         this.sessions = new SimpleVoiceChatSessionManager(context.audioBridge());
         this.bindHost = plugin.getConfig().getString("config.adapters.simple-voice-chat.bind-host", "0.0.0.0");
-        this.udpPort = plugin.getConfig().getInt("config.adapters.simple-voice-chat.port", 24454);
+        this.udpPort = plugin.getConfig().getInt("config.adapters.simple-voice-chat.port", 24455);
         this.voiceHost = plugin.getConfig().getString("config.adapters.simple-voice-chat.public.host", "");
         int configuredPublicPort = plugin.getConfig().getInt("config.adapters.simple-voice-chat.public.port", 0);
         this.publicPort = configuredPublicPort > 0 ? configuredPublicPort : udpPort;
@@ -190,8 +192,57 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
                 voiceHost == null ? "" : voiceHost,
                 allowRecording
         );
-        player.sendPluginMessage(plugin, SimpleVoiceChatChannels.SECRET, payload);
+        sendSecretPacket(player, payload);
         debug("Sent Simple Voice Chat secret to " + player.getName() + " entity=" + entityId.getAsInt() + ".");
+    }
+
+    private void sendSecretPacket(Player player, byte[] payload) {
+        if (sendNmsCustomPayload(player, SimpleVoiceChatChannels.SECRET, payload)) {
+            debug("Sent Simple Voice Chat secret via NMS custom payload to " + player.getName() + ".");
+            return;
+        }
+
+        player.sendPluginMessage(plugin, SimpleVoiceChatChannels.SECRET, payload);
+        debug("Sent Simple Voice Chat secret via Bukkit plugin message to " + player.getName() + ".");
+    }
+
+    private boolean sendNmsCustomPayload(Player player, String channel, byte[] payload) {
+        try {
+            Object identifier = createIdentifier(channel);
+            Class<?> discardedPayloadClass = Class.forName("net.minecraft.network.protocol.common.custom.DiscardedPayload");
+            Constructor<?> discardedPayloadConstructor = discardedPayloadClass.getConstructor(identifier.getClass(), byte[].class);
+            Object discardedPayload = discardedPayloadConstructor.newInstance(identifier, payload);
+
+            Class<?> packetClass = Class.forName("net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket");
+            Class<?> customPayloadClass = Class.forName("net.minecraft.network.protocol.common.custom.CustomPacketPayload");
+            Object packet = packetClass.getConstructor(customPayloadClass).newInstance(discardedPayload);
+
+            Object handle = player.getClass().getMethod("getHandle").invoke(player);
+            Object connection = handle.getClass().getField("connection").get(handle);
+            Method send = connection.getClass().getMethod("send", Class.forName("net.minecraft.network.protocol.Packet"));
+            send.invoke(connection, packet);
+            return true;
+        } catch (Exception exception) {
+            debug("Falling back to Bukkit plugin message for Simple Voice Chat secret: "
+                    + exception.getClass().getSimpleName() + ": " + exception.getMessage() + ".");
+            return false;
+        }
+    }
+
+    private Object createIdentifier(String channel) throws Exception {
+        String[] parts = channel.split(":", 2);
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid channel " + channel);
+        }
+
+        Class<?> identifierClass;
+        try {
+            identifierClass = Class.forName("net.minecraft.resources.Identifier");
+        } catch (ClassNotFoundException exception) {
+            identifierClass = Class.forName("net.minecraft.resources.ResourceLocation");
+        }
+        Method factory = identifierClass.getMethod("fromNamespaceAndPath", String.class, String.class);
+        return factory.invoke(null, parts[0], parts[1]);
     }
 
     private void runUdpLoop() {
@@ -202,6 +253,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
                 udpSocket.receive(datagram);
                 byte[] payload = new byte[datagram.getLength()];
                 System.arraycopy(datagram.getData(), datagram.getOffset(), payload, 0, datagram.getLength());
+                debug("Received Simple Voice Chat UDP datagram from " + datagram.getSocketAddress()
+                        + " bytes=" + payload.length + ".");
                 handleUdpDatagram(payload, datagram.getSocketAddress());
                 sendKeepAlives();
             } catch (SocketTimeoutException ignored) {
@@ -211,7 +264,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
                     plugin.Logger.warn("Simple Voice Chat UDP socket failed: " + exception.getMessage());
                 }
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to handle Simple Voice Chat UDP packet: " + exception.getMessage());
+                plugin.Logger.warn("Failed to handle Simple Voice Chat UDP packet: "
+                        + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             }
         }
     }
@@ -227,6 +281,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, PluginMe
 
         SimpleVoiceChatClientSession session = optionalSession.get();
         session.touch(remoteAddress);
+        debug("Decoded Simple Voice Chat UDP packet " + envelope.packet().type()
+                + " from " + session.playerName() + " at " + remoteAddress + ".");
         if (envelope.packet() instanceof AuthenticatePacket authenticatePacket) {
             if (!authenticatePacket.playerId().equals(session.playerId())) {
                 debug("Ignored Simple Voice Chat auth with mismatched player id " + authenticatePacket.playerId() + ".");

@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -36,6 +37,8 @@ import java.util.HashMap;
  * Main plugin class for VoiceCraft.Java.
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
+    private static final String CONFIG_VERSION_PATH = "config-version";
+    private static final int CURRENT_CONFIG_VERSION = 2;
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -71,6 +74,11 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     public void onEnable() {
         instance = this;
         ensureLocalizedConfigExists();
+        reloadConfig();
+        if (!migrateConfigIfNeeded()) {
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         reloadConfig();
         voiceCraftProcessManager = new VoiceCraftProcessManager(this);
         sessionManager = new PaperVoiceCraftSessionManager(this);
@@ -115,6 +123,11 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
      */
     public void reload() {
         ensureLocalizedConfigExists();
+        reloadConfig();
+        if (!migrateConfigIfNeeded()) {
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         reloadConfig();
         lang = resolveConfiguredLanguage();
         Logger.info(Language.getMessage(lang, "plugin-config-loaded"));
@@ -409,6 +422,49 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
                     Map.of("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString()));
         } catch (IOException exception) {
             Logger.error("Could not create localized config.yml: " + exception.getMessage());
+        }
+    }
+
+    private boolean migrateConfigIfNeeded() {
+        int configVersion = getConfig().getInt(CONFIG_VERSION_PATH, 0);
+        if (configVersion > CURRENT_CONFIG_VERSION) {
+            Logger.error("Config version " + configVersion + " is newer than supported version "
+                    + CURRENT_CONFIG_VERSION + ".");
+            Logger.error("VoiceCraft.Java will not start. Move config.yml away and let the plugin generate a new config.");
+            return false;
+        }
+        if (configVersion == CURRENT_CONFIG_VERSION) {
+            return true;
+        }
+
+        File configFile = new File(getDataFolder(), "config.yml");
+        YamlConfiguration userConfig = YamlConfiguration.loadConfiguration(configFile);
+        String language = PluginLocalization.resolveConfiguredLanguage(userConfig.getString("config.lang", "system"));
+        String templatePath = "config/" + language + ".yml";
+
+        try (InputStream input = openConfigTemplate(templatePath)) {
+            if (input == null) {
+                throw new IOException("Missing embedded config template for language " + language);
+            }
+
+            String template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString());
+            YamlConfiguration defaultConfig = new YamlConfiguration();
+            defaultConfig.loadFromString(template);
+
+            for (String key : defaultConfig.getKeys(true)) {
+                if (!defaultConfig.isConfigurationSection(key) && !userConfig.contains(key)) {
+                    userConfig.set(key, defaultConfig.get(key));
+                }
+            }
+
+            userConfig.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
+            userConfig.save(configFile);
+            Logger.info("Updated config.yml from version " + configVersion + " to " + CURRENT_CONFIG_VERSION + ".");
+            return true;
+        } catch (Exception exception) {
+            Logger.error("Could not migrate config.yml: " + exception.getMessage());
+            return false;
         }
     }
 

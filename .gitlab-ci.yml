@@ -3,9 +3,20 @@ image: eclipse-temurin:21-jdk
 stages:
   - test
   - build
+  - release
 
 variables:
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  RELEASE_VERSION:
+    value: "0.1.0"
+    description: "Release version without channel suffix, for example 2.0.0 or v2.0.0."
+  RELEASE_CHANNEL:
+    value: "beta"
+    options:
+      - "beta"
+      - "stable"
+      - "alpha"
+    description: "Release channel. Stable uses RELEASE_VERSION as-is; beta/alpha append the channel suffix."
 
 default:
   tags:
@@ -23,9 +34,17 @@ test:
   stage: test
   script:
     - ./gradlew test --no-daemon
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit:
+        - "**/build/test-results/test/*.xml"
 
 build:
   stage: build
+  needs:
+    - test
   script:
     - ./gradlew clean build --no-daemon
     - mkdir -p dist
@@ -42,3 +61,69 @@ build:
     expire_in: 1 week
     paths:
       - dist/*.jar
+
+release_build:
+  stage: release
+  needs:
+    - test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+    - when: never
+  script:
+    - |
+      if [ "$RELEASE_CHANNEL" = "stable" ]; then
+        BUILD_VERSION="$RELEASE_VERSION"
+        RELEASE_TAG="$RELEASE_VERSION"
+        RELEASE_DESCRIPTION="VoiceCraft.Java $RELEASE_VERSION"
+      else
+        BUILD_VERSION="$RELEASE_VERSION-$RELEASE_CHANNEL"
+        RELEASE_TAG="$RELEASE_VERSION-$RELEASE_CHANNEL"
+        RELEASE_DESCRIPTION="VoiceCraft.Java $RELEASE_VERSION $RELEASE_CHANNEL"
+      fi
+      echo "BUILD_VERSION=$BUILD_VERSION" >> release.env
+      echo "RELEASE_TAG=$RELEASE_TAG" >> release.env
+      echo "RELEASE_DESCRIPTION=$RELEASE_DESCRIPTION" >> release.env
+      echo "RELEASE_BUILD_JOB_ID=$CI_JOB_ID" >> release.env
+      ./gradlew clean build -PVERSION="$BUILD_VERSION" --no-daemon
+    - mkdir -p release-artifacts
+    - |
+      find modules -path "*/build/libs/*.jar" \
+        ! -name "*-sources.jar" \
+        ! -name "*-thin.jar" \
+        ! -path "*/core/build/libs/*" \
+        -exec cp {} release-artifacts/ \;
+    - test -n "$(find release-artifacts -name '*.jar' -print -quit)"
+  artifacts:
+    name: "voicecraft-java-release-$CI_COMMIT_REF_SLUG"
+    when: always
+    expire_in: 1 month
+    reports:
+      dotenv: release.env
+      junit:
+        - "**/build/test-results/test/*.xml"
+    paths:
+      - release-artifacts/*.jar
+
+create_gitlab_release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: release_build
+      artifacts: true
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: on_success
+    - when: never
+  script:
+    - echo "Creating GitLab release $RELEASE_TAG"
+  release:
+    name: "$RELEASE_DESCRIPTION"
+    tag_name: "$RELEASE_TAG"
+    ref: "$CI_COMMIT_SHA"
+    description: "$RELEASE_DESCRIPTION"
+    assets:
+      links:
+        - name: "Release artifacts"
+          url: "$CI_PROJECT_URL/-/jobs/$RELEASE_BUILD_JOB_ID/artifacts/download"

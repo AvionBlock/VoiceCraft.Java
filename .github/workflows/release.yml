@@ -3,27 +3,37 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      tag:
+      version:
         required: true
-        description: "Tag"
-      status:
+        description: "Base version without channel suffix, for example 2.0.0 or v2.0.0."
+      channel:
         required: true
-        description: "Status (beta, stable)"
+        description: "Release channel"
+        type: choice
+        default: beta
+        options:
+          - beta
+          - stable
+          - alpha
       publish_modrinth:
         required: true
         description: "Publish to Modrinth"
-        default: "true"
-
-env:
-  VERSION: ${{ github.event.inputs.tag }}-${{ github.event.inputs.status }}
+        type: boolean
+        default: true
 
 concurrency:
-  group: release-${{ github.event.inputs.tag }}
+  group: release-${{ inputs.version }}-${{ inputs.channel }}
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    outputs:
+      release_version: ${{ steps.release_meta.outputs.release_version }}
+      release_tag: ${{ steps.release_meta.outputs.release_tag }}
+      prerelease: ${{ steps.release_meta.outputs.prerelease }}
+      modrinth_version_type: ${{ steps.release_meta.outputs.modrinth_version_type }}
 
     steps:
       - name: Checkout repository
@@ -41,8 +51,34 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Resolve release metadata
+        id: release_meta
+        run: |
+          if [ "${{ inputs.channel }}" = "stable" ]; then
+            echo "release_version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "modrinth_version_type=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_version=${{ inputs.version }}-${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${{ inputs.version }}-${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "modrinth_version_type=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test with Gradle
+        run: ./gradlew test --no-daemon
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-reports
+          path: "**/build/reports/tests/test"
+          if-no-files-found: ignore
+
       - name: Build with Gradle
-        run: ./gradlew clean build -PVERSION="${{ env.VERSION }}" --no-daemon
+        run: ./gradlew build -x test -PVERSION="${{ steps.release_meta.outputs.release_version }}" --no-daemon
 
       - name: Collect release artifacts
         run: |
@@ -52,6 +88,7 @@ jobs:
             ! -name "*-thin.jar" \
             ! -path "*/core/build/libs/*" \
             -exec cp {} release-artifacts/ \;
+          test -n "$(find release-artifacts -name '*.jar' -print -quit)"
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
@@ -69,48 +106,34 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: voicecraft-java-release
           path: release-artifacts
 
-      - name: Create release
-        if: github.event.inputs.status == 'stable'
+      - name: Create GitHub release
         uses: ncipollo/release-action@v1.14.0
         with:
-          prerelease: false
-          tag: ${{ github.event.inputs.tag }}
-          artifacts: release-artifacts/*.jar
-          artifactErrorsFailBuild: true
-          allowUpdates: true
-          replacesArtifacts: true
-
-      - name: Create pre-release
-        if: github.event.inputs.status != 'stable'
-        uses: ncipollo/release-action@v1.14.0
-        with:
-          prerelease: true
-          tag: ${{ github.event.inputs.tag }}
+          prerelease: ${{ needs.build.outputs.prerelease }}
+          tag: ${{ needs.build.outputs.release_tag }}
+          name: VoiceCraft.Java ${{ needs.build.outputs.release_version }}
           artifacts: release-artifacts/*.jar
           artifactErrorsFailBuild: true
           allowUpdates: true
           replacesArtifacts: true
 
       - name: Create Modrinth release
-        if: github.event.inputs.publish_modrinth == 'true'
+        if: inputs.publish_modrinth
         uses: dsx137/modrinth-release-action@main
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         with:
-          name: VoiceCraft.Java ${{ github.event.inputs.tag }}
+          name: VoiceCraft.Java ${{ needs.build.outputs.release_version }}
           project_id: WtPu56Wa
           loaders: paper, purpur, velocity, bungeecord
           game_versions: 1.21.11:26.1
-          version_number: ${{ github.event.inputs.tag }}
-          featured: ${{ github.event.inputs.status == 'stable' }}
-          version_type: ${{ github.event.inputs.status == 'stable' && 'release' || 'beta' }}
+          version_number: ${{ needs.build.outputs.release_tag }}
+          featured: ${{ inputs.channel == 'stable' }}
+          version_type: ${{ needs.build.outputs.modrinth_version_type }}
           files: release-artifacts/*.jar

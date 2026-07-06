@@ -30,8 +30,19 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Test with Gradle
+        run: ./gradlew test --no-daemon
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/test"
+          if-no-files-found: ignore
+
       - name: Build with Gradle
-        run: ./gradlew clean build --no-daemon
+        run: ./gradlew build -x test --no-daemon
 
       - name: Collect release artifacts
         run: |

@@ -22,6 +22,7 @@ import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatTcpCodec;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatUdpCodec;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatUdpEnvelope;
 import team.avion.adapter.simplevoicechat.net.SimpleVoiceChatUdpPacket;
+import team.avion.adapter.simplevoicechat.session.SimpleVoiceChatSessionManager.AudioEndDebugMetrics;
 import team.avion.adapter.simplevoicechat.session.SimpleVoiceChatClientSession;
 import team.avion.adapter.simplevoicechat.session.SimpleVoiceChatSessionManager;
 import team.avion.paper.VoiceCraftJava;
@@ -77,6 +78,9 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
     private int receivedAudioBytes;
     private int forwardedAudioFrames;
     private int forwardedAudioBytes;
+    private int svcEmptyMicPackets;
+    private int svcAudioEndsSent;
+    private int svcAudioEndsCancelledByAudio;
     private final Set<String> sentStates = ConcurrentHashMap.newKeySet();
 
     public PaperSimpleVoiceChatAdapter(VoiceCraftJava plugin) {
@@ -106,7 +110,22 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
 
         state = AdapterState.STARTING;
         this.context = context;
-        this.sessions = new SimpleVoiceChatSessionManager(context.audioBridge());
+        this.sessions = new SimpleVoiceChatSessionManager(context.audioBridge(), new AudioEndDebugMetrics() {
+            @Override
+            public void svcEmptyMicReceived() {
+                debugSvcEmptyMicReceived();
+            }
+
+            @Override
+            public void svcAudioEndSent() {
+                debugSvcAudioEndSent();
+            }
+
+            @Override
+            public void svcAudioEndCancelledByAudio() {
+                debugSvcAudioEndCancelledByAudio();
+            }
+        });
         this.bindHost = plugin.getConfig().getString("config.adapters.simple-voice-chat.bind-host", "0.0.0.0");
         this.udpPort = plugin.getConfig().getInt("config.adapters.simple-voice-chat.port", 24455);
         this.voiceHost = plugin.getConfig().getString("config.adapters.simple-voice-chat.public.host", "");
@@ -167,6 +186,9 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
             }
+        }
+        if (sessions != null) {
+            sessions.close();
         }
         state = AdapterState.STOPPED;
     }
@@ -522,7 +544,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         }
     }
 
-    private void debugReceivedAudio(int bytes) {
+    private synchronized void debugReceivedAudio(int bytes) {
         if (!debug) {
             return;
         }
@@ -531,12 +553,36 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         flushAudioDebugIfNeeded();
     }
 
-    private void debugForwardedAudio(int bytes) {
+    private synchronized void debugForwardedAudio(int bytes) {
         if (!debug) {
             return;
         }
         forwardedAudioFrames++;
         forwardedAudioBytes += bytes;
+        flushAudioDebugIfNeeded();
+    }
+
+    private synchronized void debugSvcEmptyMicReceived() {
+        if (!debug) {
+            return;
+        }
+        svcEmptyMicPackets++;
+        flushAudioDebugIfNeeded();
+    }
+
+    private synchronized void debugSvcAudioEndSent() {
+        if (!debug) {
+            return;
+        }
+        svcAudioEndsSent++;
+        flushAudioDebugIfNeeded();
+    }
+
+    private synchronized void debugSvcAudioEndCancelledByAudio() {
+        if (!debug) {
+            return;
+        }
+        svcAudioEndsCancelledByAudio++;
         flushAudioDebugIfNeeded();
     }
 
@@ -551,11 +597,16 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         }
         plugin.Logger.info("[SimpleVoiceChatAdapter] Audio frames last " + (now - audioDebugWindowMillis)
                 + "ms: received=" + receivedAudioFrames + " (" + receivedAudioBytes + " bytes), forwarded="
-                + forwardedAudioFrames + " (" + forwardedAudioBytes + " bytes).");
+                + forwardedAudioFrames + " (" + forwardedAudioBytes + " bytes), svcEmptyMic=" + svcEmptyMicPackets
+                + ", svcAudioEndSent=" + svcAudioEndsSent + ", svcAudioEndCancelledByAudio="
+                + svcAudioEndsCancelledByAudio + ".");
         audioDebugWindowMillis = now;
         receivedAudioFrames = 0;
         receivedAudioBytes = 0;
         forwardedAudioFrames = 0;
         forwardedAudioBytes = 0;
+        svcEmptyMicPackets = 0;
+        svcAudioEndsSent = 0;
+        svcAudioEndsCancelledByAudio = 0;
     }
 }

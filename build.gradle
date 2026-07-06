@@ -47,6 +47,12 @@ allprojects {
 subprojects {
     apply plugin: 'java-library'
 
+    dependencies {
+        testImplementation platform('org.junit:junit-bom:5.11.4')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
     java {
         sourceCompatibility = rootProject.ext.javaTarget
         targetCompatibility = rootProject.ext.javaTarget
@@ -63,6 +69,7 @@ subprojects {
     }
 
     tasks.withType(Test).configureEach {
+        useJUnitPlatform()
         systemProperty 'file.encoding', 'UTF-8'
     }
 }

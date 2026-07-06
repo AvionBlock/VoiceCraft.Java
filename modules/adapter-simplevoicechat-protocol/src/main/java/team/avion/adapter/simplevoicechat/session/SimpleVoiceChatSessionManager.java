@@ -10,17 +10,35 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Tracks Simple Voice Chat UDP sessions and forwards microphone frames into the shared audio bridge.
  */
 public final class SimpleVoiceChatSessionManager {
+    private static final long AUDIO_END_DELAY_MILLIS = 300L;
+
     private final VoiceCraftAudioBridge audioBridge;
+    private final AudioEndDebugMetrics audioEndDebugMetrics;
+    private final ScheduledExecutorService audioEndExecutor = Executors.newSingleThreadScheduledExecutor(task -> {
+        Thread thread = new Thread(task, "VoiceCraft.Java-SVC-AudioEnd");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final Map<UUID, SimpleVoiceChatClientSession> sessionsByPlayerId = new ConcurrentHashMap<>();
     private final Map<Integer, SimpleVoiceChatClientSession> sessionsByEntityId = new ConcurrentHashMap<>();
+    private final Map<UUID, PendingAudioEnd> pendingAudioEnds = new ConcurrentHashMap<>();
 
     public SimpleVoiceChatSessionManager(VoiceCraftAudioBridge audioBridge) {
+        this(audioBridge, AudioEndDebugMetrics.NOOP);
+    }
+
+    public SimpleVoiceChatSessionManager(VoiceCraftAudioBridge audioBridge, AudioEndDebugMetrics audioEndDebugMetrics) {
         this.audioBridge = audioBridge;
+        this.audioEndDebugMetrics = audioEndDebugMetrics == null ? AudioEndDebugMetrics.NOOP : audioEndDebugMetrics;
     }
 
     /**
@@ -82,6 +100,16 @@ public final class SimpleVoiceChatSessionManager {
         if (removed != null) {
             sessionsByEntityId.remove(removed.voiceCraftEntityId());
         }
+        cancelPendingAudioEnd(playerId, false);
+    }
+
+    /**
+     * Stops delayed audio-end work owned by this session manager.
+     */
+    public void close() {
+        pendingAudioEnds.values().forEach(pending -> pending.future().cancel(false));
+        pendingAudioEnds.clear();
+        audioEndExecutor.shutdownNow();
     }
 
     /**
@@ -92,9 +120,11 @@ public final class SimpleVoiceChatSessionManager {
      */
     public void forwardAudio(SimpleVoiceChatClientSession session, MicPacket packet) {
         if (packet.data().length == 0) {
-            audioBridge.sendEntityAudioEnd(session.voiceCraftEntityId(), packet.sequenceNumber());
+            audioEndDebugMetrics.svcEmptyMicReceived();
+            scheduleAudioEnd(session, packet.sequenceNumber());
             return;
         }
+        cancelPendingAudioEnd(session.playerId(), true);
         session.touch(session.remoteAddress());
         audioBridge.sendEntityAudio(
                 session.voiceCraftEntityId(),
@@ -102,5 +132,53 @@ public final class SimpleVoiceChatSessionManager {
                 1.0f,
                 packet.data()
         );
+    }
+
+    private void scheduleAudioEnd(SimpleVoiceChatClientSession session, long sequenceNumber) {
+        PendingAudioEnd existing = pendingAudioEnds.get(session.playerId());
+        if (existing != null && !existing.future().isDone()) {
+            return;
+        }
+
+        ScheduledFuture<?> future = audioEndExecutor.schedule(
+                () -> sendPendingAudioEnd(session.playerId(), session.voiceCraftEntityId(), sequenceNumber),
+                AUDIO_END_DELAY_MILLIS,
+                TimeUnit.MILLISECONDS
+        );
+        pendingAudioEnds.put(session.playerId(), new PendingAudioEnd(future));
+    }
+
+    private void sendPendingAudioEnd(UUID playerId, int entityId, long sequenceNumber) {
+        PendingAudioEnd pending = pendingAudioEnds.remove(playerId);
+        if (pending == null || pending.future().isCancelled()) {
+            return;
+        }
+        audioBridge.sendEntityAudioEnd(entityId, sequenceNumber);
+        audioEndDebugMetrics.svcAudioEndSent();
+    }
+
+    private void cancelPendingAudioEnd(UUID playerId, boolean cancelledByAudio) {
+        PendingAudioEnd pending = pendingAudioEnds.remove(playerId);
+        if (pending == null || !pending.future().cancel(false) || !cancelledByAudio) {
+            return;
+        }
+        audioEndDebugMetrics.svcAudioEndCancelledByAudio();
+    }
+
+    private record PendingAudioEnd(ScheduledFuture<?> future) {
+    }
+
+    public interface AudioEndDebugMetrics {
+        AudioEndDebugMetrics NOOP = new AudioEndDebugMetrics() {
+        };
+
+        default void svcEmptyMicReceived() {
+        }
+
+        default void svcAudioEndSent() {
+        }
+
+        default void svcAudioEndCancelledByAudio() {
+        }
     }
 }

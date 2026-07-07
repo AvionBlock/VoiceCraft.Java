@@ -1,4 +1,4 @@
-﻿config-version: 1 # DO NOT EDIT: used for automatic config migrations
+﻿config-version: 2 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -23,3 +23,15 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Positie-update-interval in ticks
+
+  adapters:
+    plasmo:
+      proxy:
+        enabled: false
+        bind-host: "0.0.0.0"
+        port: 24454
+    simple-voice-chat:
+      proxy:
+        enabled: false
+        bind-host: "0.0.0.0"
+        port: 24455

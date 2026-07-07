@@ -279,6 +279,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
             SimpleVoiceChatClientSession session = sessions.byPlayerId(event.getPlayer().getUniqueId()).orElse(null);
             sessions.remove(event.getPlayer().getUniqueId());
             if (session != null) {
+                unregisterProxyUdpRoute(event.getPlayer(), session);
                 context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
             }
             plugin.getSessionManager().destroyEntityForPlayer(event.getPlayer().getName());
@@ -293,6 +294,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
 
         Optional<SimpleVoiceChatClientSession> existingSession = sessions.byPlayerId(player.getUniqueId());
         if (existingSession.isPresent()) {
+            registerProxyUdpRoute(player, existingSession.get());
             sendSecret(player, existingSession.get());
             debug("Resent Simple Voice Chat secret to " + player.getName()
                     + " entity=" + existingSession.get().voiceCraftEntityId() + ".");
@@ -315,8 +317,17 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         VoiceCraftEntityIdentity identity = new VoiceCraftEntityIdentity(entityId.getAsInt(), player.getUniqueId(),
                 player.getName(), id());
         context.audioBridge().registerEntityIdentity(identity);
+        registerProxyUdpRoute(player, session);
         sendSecret(player, session);
         debug("Sent Simple Voice Chat secret to " + player.getName() + " entity=" + entityId.getAsInt() + ".");
+    }
+
+    private void registerProxyUdpRoute(Player player, SimpleVoiceChatClientSession session) {
+        plugin.getMessageHandler().sendUdpRouteRegister(player, id(), session.playerId().toString(), udpPort);
+    }
+
+    private void unregisterProxyUdpRoute(Player player, SimpleVoiceChatClientSession session) {
+        plugin.getMessageHandler().sendUdpRouteUnregister(player, id(), session.playerId().toString());
     }
 
     private void sendSecret(Player player, SimpleVoiceChatClientSession session) {

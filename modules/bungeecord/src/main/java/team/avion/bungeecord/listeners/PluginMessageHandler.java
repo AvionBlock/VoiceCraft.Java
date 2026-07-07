@@ -63,6 +63,16 @@ public class PluginMessageHandler implements Listener {
                 ProxyMessageCodec.UnbindRequest unbindRequest = ProxyMessageCodec.decodeUnbindRequest(data);
                 plugin.handleProxyUnbindRequest(unbindRequest.playerId(), unbindRequest.playerName());
                 sendBindSync(unbindRequest.playerName(), false);
+            } else if (ProxyMessageCodec.UDP_ROUTE_REGISTER.equals(type)) {
+                ProxyMessageCodec.UdpRouteRegister route = ProxyMessageCodec.decodeUdpRouteRegister(data);
+                String backendHost = backendHost(event);
+                if (backendHost != null) {
+                    plugin.getUdpRelayManager().registerRoute(route.adapterId(), route.routeKey(), backendHost,
+                            route.backendPort());
+                }
+            } else if (ProxyMessageCodec.UDP_ROUTE_UNREGISTER.equals(type)) {
+                ProxyMessageCodec.UdpRouteUnregister route = ProxyMessageCodec.decodeUdpRouteUnregister(data);
+                plugin.getUdpRelayManager().unregisterRoute(route.adapterId(), route.routeKey());
             } else {
                 plugin.Logger.debug("Ignoring unknown proxy message type from " + serverName + ": " + type);
             }
@@ -71,5 +81,15 @@ public class PluginMessageHandler implements Listener {
         }
 
         event.setCancelled(true);
+    }
+
+    private String backendHost(PluginMessageEvent event) {
+        if (event.getSender() instanceof Server backend) {
+            return backend.getInfo().getAddress().getHostString();
+        }
+        if (event.getSender() instanceof ProxiedPlayer player && player.getServer() != null) {
+            return player.getServer().getInfo().getAddress().getHostString();
+        }
+        return null;
     }
 }

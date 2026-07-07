@@ -46,6 +46,34 @@ public class PluginMessageHandler implements PluginMessageListener {
         }
     }
 
+    public boolean sendUdpRouteRegister(Player player, String adapterId, String routeKey, int backendPort) {
+        if (!plugin.usesProxy || player == null || !player.isOnline()) {
+            return false;
+        }
+        try {
+            player.sendPluginMessage(plugin, ProxyMessageCodec.CHANNEL_NAME,
+                    ProxyMessageCodec.encodeUdpRouteRegister(adapterId, routeKey, backendPort));
+            return true;
+        } catch (Exception exception) {
+            plugin.Logger.debug("Failed to send proxy UDP route register: " + exception.getMessage());
+            return false;
+        }
+    }
+
+    public boolean sendUdpRouteUnregister(Player player, String adapterId, String routeKey) {
+        if (!plugin.usesProxy || player == null || !player.isOnline()) {
+            return false;
+        }
+        try {
+            player.sendPluginMessage(plugin, ProxyMessageCodec.CHANNEL_NAME,
+                    ProxyMessageCodec.encodeUdpRouteUnregister(adapterId, routeKey));
+            return true;
+        } catch (Exception exception) {
+            plugin.Logger.debug("Failed to send proxy UDP route unregister: " + exception.getMessage());
+            return false;
+        }
+    }
+
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
         if (!ProxyMessageCodec.CHANNEL_NAME.equals(channel) || message == null || message.length == 0) {

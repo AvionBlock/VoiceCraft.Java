@@ -329,6 +329,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             playerStatesById.remove(event.getPlayer().getUniqueId());
             sentSourcesByReceiver.remove(event.getPlayer().getUniqueId());
             if (session != null) {
+                unregisterProxyUdpRoute(event.getPlayer(), session);
                 context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
             }
             plugin.getSessionManager().destroyEntityForPlayer(event.getPlayer().getName());
@@ -367,7 +368,16 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId.getAsInt(), session);
         debug("Created Plasmo session for " + player.getName() + " entity=" + entityId.getAsInt()
                 + " secret=" + session.udpSecret() + " endpoint=" + publicHost + ":" + publicPort + ".");
+        registerProxyUdpRoute(player, session);
         sendTcpPacket(player, new ConnectionPacket(session.udpSecret(), publicHost, publicPort));
+    }
+
+    private void registerProxyUdpRoute(Player player, PlasmoClientSession session) {
+        plugin.getMessageHandler().sendUdpRouteRegister(player, id(), session.udpSecret().toString(), udpPort);
+    }
+
+    private void unregisterProxyUdpRoute(Player player, PlasmoClientSession session) {
+        plugin.getMessageHandler().sendUdpRouteUnregister(player, id(), session.udpSecret().toString());
     }
 
     private void runUdpLoop() {

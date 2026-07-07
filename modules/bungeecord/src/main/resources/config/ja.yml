@@ -1,4 +1,6 @@
-﻿config:
+﻿config-version: 1 # DO NOT EDIT: used for automatic config migrations
+
+config:
   debug: false # 追加のデバッグログを有効化します
   lang: "system" # system, en, ru, nl, ja
   auto-reconnect: true # 切断時に VoiceCraft へ再接続します

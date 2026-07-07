@@ -1,7 +1,5 @@
 package team.avion.paper.listeners;
 
-import java.util.Objects;
-
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 
@@ -54,12 +52,19 @@ public class PluginMessageHandler implements PluginMessageListener {
             return;
         }
 
-        String type = ProxyMessageCodec.peekType(Objects.requireNonNull(message, "message"));
-        if (!ProxyMessageCodec.BIND_SYNC.equals(type)) {
+        ProxyMessageCodec.BindSync bindSync;
+        try {
+            String type = ProxyMessageCodec.peekType(message);
+            if (!ProxyMessageCodec.BIND_SYNC.equals(type)) {
+                plugin.Logger.debug("Ignoring unknown proxy message type: " + type);
+                return;
+            }
+            bindSync = ProxyMessageCodec.decodeBindSync(message);
+        } catch (IllegalArgumentException exception) {
+            plugin.Logger.warn("Ignoring invalid proxy message: " + exception.getMessage());
             return;
         }
 
-        ProxyMessageCodec.BindSync bindSync = ProxyMessageCodec.decodeBindSync(message);
         boolean previousState = plugin.getPlayerBinds().getOrDefault(bindSync.playerName(), false);
         if (previousState == bindSync.bound()) {
             return;

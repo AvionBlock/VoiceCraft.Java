@@ -25,12 +25,19 @@ import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import team.avion.paper.VoiceCraftJava;
 import team.avion.protocol.VoiceCraftProtocol;
 import team.avion.protocol.VoiceCraftRuntimeDefaults;
 
 public class VoiceCraftProcessManager {
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final VoiceCraftJava plugin;
 
@@ -176,7 +183,8 @@ public class VoiceCraftProcessManager {
                         plugin.Logger.info("[VoiceCraft] " + line);
                     }
                 }
-            } catch (IOException ignored) {
+            } catch (IOException exception) {
+                plugin.Logger.debug("Managed VoiceCraft log pump stopped: " + exception.getMessage());
             }
         }, errorStream ? "voicecraft-stderr" : "voicecraft-stdout");
         thread.setDaemon(true);
@@ -233,7 +241,8 @@ public class VoiceCraftProcessManager {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(plugin.getHost(), plugin.getPort()), 500);
             return true;
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            plugin.Logger.debug("VoiceCraft endpoint is not reachable yet: " + exception.getMessage());
             return false;
         }
     }
@@ -301,14 +310,33 @@ public class VoiceCraftProcessManager {
             return new ManagedConfigSyncResult(serverPropertiesPath, false, true);
         }
 
-        String content = Files.readString(serverPropertiesPath, StandardCharsets.UTF_8);
-        String updated = content.replaceFirst("\"Port\"\\s*:\\s*\\d+", "\"Port\": " + plugin.getManagedVoicePort());
-        if (!updated.equals(content)) {
-            Files.writeString(serverPropertiesPath, updated, StandardCharsets.UTF_8,
+        JsonElement root = JsonParser.parseString(Files.readString(serverPropertiesPath, StandardCharsets.UTF_8));
+        if (!root.isJsonObject()) {
+            throw new IOException("Managed VoiceCraft config root must be a JSON object: " + serverPropertiesPath);
+        }
+
+        JsonObject rootObject = root.getAsJsonObject();
+        int managedVoicePort = plugin.getManagedVoicePort();
+        JsonElement currentPort = rootObject.get("Port");
+        if (!jsonPortEquals(currentPort, managedVoicePort)) {
+            rootObject.addProperty("Port", managedVoicePort);
+            Files.writeString(serverPropertiesPath, PRETTY_GSON.toJson(rootObject) + System.lineSeparator(), StandardCharsets.UTF_8,
                     StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
             return new ManagedConfigSyncResult(serverPropertiesPath, true, false);
         }
         return new ManagedConfigSyncResult(serverPropertiesPath, false, false);
+    }
+
+    private static boolean jsonPortEquals(JsonElement element, int expectedPort) {
+        if (element == null || !element.isJsonPrimitive()) {
+            return false;
+        }
+
+        try {
+            return element.getAsInt() == expectedPort;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
     }
 
     Path getManagedServerPropertiesPath() {

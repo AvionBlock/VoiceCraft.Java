@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -33,6 +34,8 @@ import team.avion.common.localization.PluginLocalization;
 import team.avion.proxy.VoiceCraftProxySessionManager;
 
 public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
+    private static final String CONFIG_VERSION_PATH = "config-version";
+    private static final int CURRENT_CONFIG_VERSION = 1;
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -67,6 +70,10 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
 
         ensureLocalizedConfigExists();
         reloadConfig();
+        if (!migrateConfigIfNeeded()) {
+            return;
+        }
+        reloadConfig();
         lang = resolveConfiguredLanguage();
         Language.init(this);
 
@@ -90,6 +97,10 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
 
     @Override
     public void reload() {
+        reloadConfig();
+        if (!migrateConfigIfNeeded()) {
+            return;
+        }
         reloadConfig();
         lang = resolveConfiguredLanguage();
         Logger.info(Language.getMessage(lang, "plugin-config-loaded"));
@@ -373,6 +384,51 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
     private InputStream openConfigTemplate(String language) {
         InputStream input = getResourceAsStream("config/" + language + ".yml");
         return input != null ? input : getResourceAsStream("config/en.yml");
+    }
+
+    private boolean migrateConfigIfNeeded() {
+        int configVersion = getConfig().getInt(CONFIG_VERSION_PATH, 0);
+        if (configVersion > CURRENT_CONFIG_VERSION) {
+            Logger.error("Config version " + configVersion + " is newer than supported version "
+                    + CURRENT_CONFIG_VERSION + ".");
+            Logger.error("VoiceCraft.Java will not start. Move config.yml away and let the plugin generate a new config.");
+            return false;
+        }
+        if (configVersion == CURRENT_CONFIG_VERSION) {
+            return true;
+        }
+
+        String language = PluginLocalization.resolveConfiguredLanguage(getConfig().getString("config.lang", "system"));
+        try (InputStream input = openConfigTemplate(language)) {
+            if (input == null) {
+                throw new IOException("Missing embedded config template for language " + language);
+            }
+
+            String template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString());
+            Configuration defaultConfig = ConfigurationProvider.getProvider(YamlConfiguration.class)
+                    .load(new StringReader(template));
+            mergeMissingConfig(config, defaultConfig, "");
+            config.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
+            saveConfig();
+            Logger.info("Updated config.yml from version " + configVersion + " to " + CURRENT_CONFIG_VERSION + ".");
+            return true;
+        } catch (Exception exception) {
+            Logger.error("Could not migrate config.yml: " + exception.getMessage());
+            return false;
+        }
+    }
+
+    private static void mergeMissingConfig(Configuration target, Configuration defaults, String prefix) {
+        for (String key : defaults.getKeys()) {
+            String path = prefix.isEmpty() ? key : prefix + "." + key;
+            Object value = defaults.get(key);
+            if (value instanceof Configuration section) {
+                mergeMissingConfig(target, section, path);
+            } else if (!target.contains(path)) {
+                target.set(path, value);
+            }
+        }
     }
 
     private String getTransportHost() {

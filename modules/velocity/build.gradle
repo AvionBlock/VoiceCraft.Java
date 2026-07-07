@@ -2,6 +2,9 @@ plugins {
     id 'com.gradleup.shadow' version '9.4.3'
 }
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
 description = 'Velocity adapter for VoiceCraft.Java.'
 
 dependencies {
@@ -33,12 +36,36 @@ processResources {
     }
 }
 
+tasks.register('patchVelocityPluginJson') {
+    dependsOn tasks.compileJava
+    inputs.file(layout.buildDirectory.file('classes/java/main/velocity-plugin.json'))
+    inputs.property('version', project.version.toString())
+    inputs.property('description', rootProject.description)
+    inputs.property('author', rootProject.ext.pluginAuthor)
+    outputs.file(layout.buildDirectory.file('classes/java/main/velocity-plugin.json'))
+
+    doLast {
+        def pluginJsonFile = layout.buildDirectory.file('classes/java/main/velocity-plugin.json').get().asFile
+        if (!pluginJsonFile.exists()) {
+            throw new GradleException("Velocity plugin metadata was not generated: ${pluginJsonFile}")
+        }
+
+        def metadata = new JsonSlurper().parse(pluginJsonFile)
+        metadata.version = project.version.toString()
+        metadata.description = rootProject.description
+        metadata.authors = [rootProject.ext.pluginAuthor]
+        pluginJsonFile.text = JsonOutput.toJson(metadata)
+    }
+}
+
 tasks.jar {
+    dependsOn tasks.patchVelocityPluginJson
     archiveBaseName.set("${rootProject.ext.pluginName}-velocity")
     archiveClassifier.set('thin')
 }
 
 tasks.shadowJar {
+    dependsOn tasks.patchVelocityPluginJson
     archiveBaseName.set("${rootProject.ext.pluginName}-velocity")
     archiveClassifier.set('')
 }

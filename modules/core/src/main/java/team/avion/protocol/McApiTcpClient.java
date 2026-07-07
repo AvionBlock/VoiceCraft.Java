@@ -122,7 +122,8 @@ public final class McApiTcpClient {
             LogoutRequestPacket logoutPacket = new LogoutRequestPacket();
             logoutPacket.Token = sessionToken;
             exchangeInternal(sessionToken, List.of(logoutPacket));
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            logger.debug("VoiceCraft TCP logout failed: " + exception.getMessage());
         } finally {
             close();
         }
@@ -147,19 +148,22 @@ public final class McApiTcpClient {
         if (input != null) {
             try {
                 input.close();
-            } catch (IOException ignored) {
+            } catch (IOException exception) {
+                logger.debug("Failed to close VoiceCraft TCP input stream: " + exception.getMessage());
             }
         }
         if (output != null) {
             try {
                 output.close();
-            } catch (IOException ignored) {
+            } catch (IOException exception) {
+                logger.debug("Failed to close VoiceCraft TCP output stream: " + exception.getMessage());
             }
         }
         if (socket != null) {
             try {
                 socket.close();
-            } catch (IOException ignored) {
+            } catch (IOException exception) {
+                logger.debug("Failed to close VoiceCraft TCP socket: " + exception.getMessage());
             }
         }
 

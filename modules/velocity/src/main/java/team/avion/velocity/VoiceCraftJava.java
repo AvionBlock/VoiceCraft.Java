@@ -44,6 +44,8 @@ import team.avion.velocity.utils.VelocityLogger;
 
 @Plugin(id = "voicecraft-java", name = "VoiceCraft.Java", version = "0.0.0", description = "VoiceCraft bridge for Velocity", authors = { "0xAlpha" })
 public class VoiceCraftJava implements BaseVoiceCraftJava {
+    private static final String CONFIG_VERSION_PATH = "config-version";
+    private static final int CURRENT_CONFIG_VERSION = 1;
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -89,6 +91,10 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
         reloadConfig();
+        if (!migrateConfigIfNeeded()) {
+            return;
+        }
+        reloadConfig();
         lang = resolveConfiguredLanguage();
         Language.init(this);
 
@@ -107,6 +113,10 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
 
     @Override
     public void reload() {
+        reloadConfig();
+        if (!migrateConfigIfNeeded()) {
+            return;
+        }
         reloadConfig();
         lang = resolveConfiguredLanguage();
         Logger.info(Language.getMessage(lang, "plugin-config-loaded"));
@@ -385,6 +395,37 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
     private InputStream openConfigTemplate(String language) {
         InputStream input = getClass().getClassLoader().getResourceAsStream("config/" + language + ".yml");
         return input != null ? input : getClass().getClassLoader().getResourceAsStream("config/en.yml");
+    }
+
+    private boolean migrateConfigIfNeeded() {
+        int configVersion = getConfig().getInt(CONFIG_VERSION_PATH, 0);
+        if (configVersion > CURRENT_CONFIG_VERSION) {
+            Logger.error("Config version " + configVersion + " is newer than supported version "
+                    + CURRENT_CONFIG_VERSION + ".");
+            Logger.error("VoiceCraft.Java will not start. Move config.yml away and let the plugin generate a new config.");
+            return false;
+        }
+        if (configVersion == CURRENT_CONFIG_VERSION) {
+            return true;
+        }
+
+        String language = PluginLocalization.resolveConfiguredLanguage(getConfig().getString("config.lang", "system"));
+        try (InputStream input = openConfigTemplate(language)) {
+            if (input == null) {
+                throw new IOException("Missing embedded config template for language " + language);
+            }
+
+            String template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString());
+            getConfig().mergeMissingFrom(template);
+            getConfig().set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
+            saveConfig();
+            Logger.info("Updated config.yml from version " + configVersion + " to " + CURRENT_CONFIG_VERSION + ".");
+            return true;
+        } catch (Exception exception) {
+            Logger.error("Could not migrate config.yml: " + exception.getMessage());
+            return false;
+        }
     }
 
     private String getTransportHost() {

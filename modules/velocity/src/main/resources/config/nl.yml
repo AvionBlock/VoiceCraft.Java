@@ -1,4 +1,6 @@
-﻿config:
+﻿config-version: 1 # DO NOT EDIT: used for automatic config migrations
+
+config:
   debug: false # Extra debuglogging inschakelen
   lang: "system" # system, en, ru, nl, ja
   auto-reconnect: true # Opnieuw verbinden met VoiceCraft na verbindingsverlies

@@ -1,6 +1,8 @@
 package team.avion.velocity.config;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -59,11 +61,33 @@ public final class VelocityYamlConfig {
         node(key).set(value);
     }
 
+    public void mergeMissingFrom(String content) throws IOException {
+        YamlConfigurationLoader templateLoader = YamlConfigurationLoader.builder()
+                .source(() -> new BufferedReader(new StringReader(content)))
+                .build();
+        CommentedConfigurationNode templateRoot = templateLoader.load();
+        mergeMissing(root, templateRoot);
+    }
+
     public boolean contains(String key) {
         return !node(key).virtual();
     }
 
     private CommentedConfigurationNode node(String key) {
         return root.node((Object[]) key.split("\\."));
+    }
+
+    private static void mergeMissing(CommentedConfigurationNode target, CommentedConfigurationNode defaults)
+            throws SerializationException {
+        if (!defaults.childrenMap().isEmpty()) {
+            for (Object key : defaults.childrenMap().keySet()) {
+                mergeMissing(target.node(key), defaults.node(key));
+            }
+            return;
+        }
+
+        if (target.virtual()) {
+            target.set(defaults.raw());
+        }
     }
 }

@@ -201,6 +201,8 @@ public class VoiceCraftProcessManager {
         command.add(Integer.toString(plugin.getPort()));
         command.add("--server-key");
         command.add(plugin.getLoginToken());
+        command.add("--voice-port");
+        command.add(Integer.toString(plugin.getManagedVoicePort()));
     }
 
     private void configureRuntimeEnvironment(ProcessBuilder builder) {
@@ -316,10 +318,16 @@ public class VoiceCraftProcessManager {
         }
 
         JsonObject rootObject = root.getAsJsonObject();
-        int managedVoicePort = plugin.getManagedVoicePort();
-        JsonElement currentPort = rootObject.get("Port");
-        if (!jsonPortEquals(currentPort, managedVoicePort)) {
-            rootObject.addProperty("Port", managedVoicePort);
+        boolean changed = false;
+        changed |= setNestedNumber(rootObject, "VoiceCraftConfig", "Port", plugin.getManagedVoicePort());
+        changed |= setNestedBoolean(rootObject, "McTcpConfig", "Enabled", true);
+        changed |= setNestedString(rootObject, "McTcpConfig", "Hostname", plugin.getHost());
+        changed |= setNestedNumber(rootObject, "McTcpConfig", "Port", plugin.getPort());
+        changed |= setNestedString(rootObject, "McTcpConfig", "LoginToken", plugin.getLoginToken());
+        changed |= setNestedBoolean(rootObject, "McHttpConfig", "Enabled", false);
+        changed |= setNestedBoolean(rootObject, "McWssConfig", "Enabled", false);
+
+        if (changed) {
             Files.writeString(serverPropertiesPath, PRETTY_GSON.toJson(rootObject) + System.lineSeparator(), StandardCharsets.UTF_8,
                     StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
             return new ManagedConfigSyncResult(serverPropertiesPath, true, false);
@@ -327,16 +335,60 @@ public class VoiceCraftProcessManager {
         return new ManagedConfigSyncResult(serverPropertiesPath, false, false);
     }
 
-    private static boolean jsonPortEquals(JsonElement element, int expectedPort) {
-        if (element == null || !element.isJsonPrimitive()) {
+    private static boolean setNestedBoolean(JsonObject rootObject, String objectName, String propertyName,
+            boolean expectedValue) {
+        JsonObject object = nestedObject(rootObject, objectName);
+        JsonElement currentValue = object.get(propertyName);
+        if (currentValue != null && currentValue.isJsonPrimitive()
+                && currentValue.getAsJsonPrimitive().isBoolean()
+                && currentValue.getAsBoolean() == expectedValue) {
             return false;
         }
 
-        try {
-            return element.getAsInt() == expectedPort;
-        } catch (NumberFormatException exception) {
+        object.addProperty(propertyName, expectedValue);
+        return true;
+    }
+
+    private static boolean setNestedNumber(JsonObject rootObject, String objectName, String propertyName,
+            int expectedValue) {
+        JsonObject object = nestedObject(rootObject, objectName);
+        JsonElement currentValue = object.get(propertyName);
+        if (currentValue != null && currentValue.isJsonPrimitive()) {
+            try {
+                if (currentValue.getAsInt() == expectedValue) {
+                    return false;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        object.addProperty(propertyName, expectedValue);
+        return true;
+    }
+
+    private static boolean setNestedString(JsonObject rootObject, String objectName, String propertyName,
+            String expectedValue) {
+        JsonObject object = nestedObject(rootObject, objectName);
+        String normalizedValue = expectedValue == null ? "" : expectedValue;
+        JsonElement currentValue = object.get(propertyName);
+        if (currentValue != null && currentValue.isJsonPrimitive()
+                && normalizedValue.equals(currentValue.getAsString())) {
             return false;
         }
+
+        object.addProperty(propertyName, normalizedValue);
+        return true;
+    }
+
+    private static JsonObject nestedObject(JsonObject rootObject, String objectName) {
+        JsonElement currentObject = rootObject.get(objectName);
+        if (currentObject != null && currentObject.isJsonObject()) {
+            return currentObject.getAsJsonObject();
+        }
+
+        JsonObject object = new JsonObject();
+        rootObject.add(objectName, object);
+        return object;
     }
 
     Path getManagedServerPropertiesPath() {

@@ -4,7 +4,7 @@
 
 VoiceCraft.Java は Java Minecraft サーバー向けの究極のボイスチャットプラグインです。
 
-VoiceCraft をサーバー全体のボイスレイヤーとして使えるようにし、異なるボイスクライアントを使うプレイヤーが同じ proximity voice 空間を共有できます。Simple Voice Chat、Plasmo Voice、VoiceCraft client のプレイヤーが、1 つの backend を通して互いに聞き合い、話すことができます。
+VoiceCraft をサーバー全体のボイスレイヤーとして使えるようにし、異なるボイスクライアントを使うプレイヤーが同じ proximity voice 空間を共有できます。Simple Voice Chat、Plasmo Voice、VoiceCraft client のプレイヤーが、1 つの backend を通して互いの声を聞き、会話できます。
 
 これは cross-play サーバーで特に便利です。Bedrock プレイヤーは Java サーバーに参加して VoiceCraft client でボイスチャットを使えます。一方で Java プレイヤーは Simple Voice Chat や Plasmo Voice のような慣れたクライアントを使い続けられます。
 
@@ -24,30 +24,31 @@ VoiceCraft はオーディオエンジンです。VoiceCraft.Java は、その�
 
 ## プレイヤーが使えるクライアント
 
-| Player client | Supported through | プラグインの役割 |
+| プレイヤークライアント | 対応方式 | プラグインの役割 |
 | --- | --- | --- |
 | VoiceCraft client | VoiceCraft backend + `/voice bind` | 外部 VoiceCraft session をゲーム内プレイヤーに bind し、位置や効果を更新します。 |
 | Simple Voice Chat | Paper adapter | plugin-message/UDP handshake を処理し、VoiceCraft entity を作成して Opus audio を転送します。 |
 | Plasmo Voice | Paper adapter | Plasmo TCP/UDP protocol を処理し、VoiceCraft entity を作成して Opus audio を転送します。 |
 | Java cross-play サーバー上の Bedrock プレイヤー | VoiceCraft client | Java client mods なしで Bedrock プレイヤーに voice path を提供します。 |
 
-Paper 上で一緒に有効化すると、Simple Voice Chat と Plasmo Voice のクライアントは同じ VoiceCraft audio bridge に接続されます。Simple Voice Chat から話すプレイヤーは Plasmo Voice や VoiceCraft client のユーザーに聞こえ、その逆も同様です。
+Paper 上で一緒に有効化すると、Simple Voice Chat と Plasmo Voice のクライアントは同じ VoiceCraft audio bridge に接続されます。Simple Voice Chat で話すプレイヤーの声は Plasmo Voice や VoiceCraft client のユーザーに届き、その逆も同様です。
 
 ## 主な機能
 
-- VoiceCraft client、Simple Voice Chat、Plasmo Voice をまたいだ unified proximity voice chat。
+- VoiceCraft client、Simple Voice Chat、Plasmo Voice をまたいだ統合 proximity voice chat。
 - VoiceCraft client による Java cross-play サーバー上の Bedrock プレイヤー向け voice chat。
 - 単一サーバー向け Direct Paper mode。
-- multi-server ネットワーク向け Velocity / BungeeCord proxy mode。
-- Paper 上の managed VoiceCraft runtime: 自動 download、startup、configuration sync、shutdown。
-- Server-side の player positioning、dimension tracking、proximity distance、cave echo、muffle updates。
+- 複数サーバーネットワーク向け Velocity / BungeeCord proxy mode。
+- Velocity / BungeeCord ネットワーク向け Simple Voice Chat / Plasmo Voice の proxy UDP relay。
+- Paper 上の managed VoiceCraft Server 1.7 runtime: 自動ダウンロード、起動、runtime option の同期、停止。
+- サーバー側の player positioning、dimension tracking、proximity distance、cave echo、muffle updates。
 - 外部 VoiceCraft clients 向けの短い in-game bind keys による binding flow。
 - ローカライズ済み config/message templates: `en`, `ru`, `nl`, `ja`。
 - Paper 上の optional PlaceholderAPI support。
 
 ## 仕組み
 
-### VoiceCraft Client Flow
+### VoiceCraft Client の流れ
 
 VoiceCraft client を使うプレイヤーは VoiceCraft backend に接続します。その後 VoiceCraft.Java が、その外部 voice entity を Minecraft プレイヤーに bind します。
 
@@ -55,7 +56,7 @@ VoiceCraft client を使うプレイヤーは VoiceCraft backend に接続しま
 VoiceCraft client -> VoiceCraft backend <- VoiceCraft.Java <- Minecraft server
 ```
 
-典型的な flow:
+典型的な流れ:
 
 1. プレイヤーが VoiceCraft に接続します。
 2. VoiceCraft が新しい network entity を作成します。
@@ -66,7 +67,7 @@ VoiceCraft client -> VoiceCraft backend <- VoiceCraft.Java <- Minecraft server
 
 これは Java voice mods を使えないプレイヤー、特に Bedrock プレイヤー向けの主要な経路です。
 
-### Simple Voice Chat と Plasmo Voice Flow
+### Simple Voice Chat と Plasmo Voice の流れ
 
 Paper 上では、VoiceCraft.Java は Java voice mods 向けの compatibility server として動作できます。
 
@@ -78,7 +79,7 @@ VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio b
 
 Adapters はクライアントプロトコルを扱い、UDP sessions を管理し、Opus frames を共有 VoiceCraft audio bridge に渡します。VoiceCraft から戻ってきた audio は登録済み adapters に配信されるため、異なるクライアントのプレイヤーが同じ会話に参加できます。
 
-## Runtime Modes
+## 実行モード
 
 ### Direct Paper Mode
 
@@ -86,9 +87,9 @@ Adapters はクライアントプロトコルを扱い、UDP sessions を管理�
 Paper -> VoiceCraft.Java -> VoiceCraft
 ```
 
-単一 Paper サーバー向けです。
+単一の Paper サーバー向けです。
 
-Paper plugin が VoiceCraft connection を所有します。既存の VoiceCraft backend に接続することも、VoiceCraft runtime を自動で download して起動することもできます。
+Paper plugin が VoiceCraft connection を所有します。既存の VoiceCraft backend に接続することも、VoiceCraft runtime を自動でダウンロードして起動することもできます。
 
 ### Proxy Mode
 
@@ -96,40 +97,42 @@ Paper plugin が VoiceCraft connection を所有します。既存の VoiceCraft
 Paper backends -> Velocity/BungeeCord -> VoiceCraft
 ```
 
-複数 backend servers を持つネットワーク向けです。
+複数の backend servers を持つネットワーク向けです。
 
 VoiceCraft.Java をすべての Paper backend と proxy にインストールします。Proxy が VoiceCraft connection を所有し、Paper backends は `voicecraft-java:main` plugin channel 経由で player snapshots と bind/unbind requests を送信します。
 
-## Platform Support
+Proxy mode でも Simple Voice Chat と Plasmo Voice の audio は UDP のままです。Paper は `voicecraft-java:main` で voice routes を登録し、Velocity/BungeeCord は public UDP relay ports を開いて raw voice datagrams を現在の backend Paper adapter に転送します。
 
-| Platform | Role |
+## 対応プラットフォーム
+
+| プラットフォーム | 役割 |
 | --- | --- |
-| Paper | Direct runtime, backend runtime, managed VoiceCraft process, Simple Voice Chat adapter, Plasmo Voice adapter |
-| Velocity | Proxy runtime と中央 VoiceCraft connection |
-| BungeeCord | Proxy runtime と中央 VoiceCraft connection |
+| Paper | Direct runtime、backend runtime、managed VoiceCraft Server process、Simple Voice Chat adapter、Plasmo Voice adapter |
+| Velocity | Proxy runtime、中央 VoiceCraft connection、Simple Voice Chat / Plasmo の UDP relay |
+| BungeeCord | Proxy runtime、中央 VoiceCraft connection、Simple Voice Chat / Plasmo の UDP relay |
 
-## Requirements
+## 要件
 
 - Java 21。
 - Paper、Velocity、BungeeCord。
-- Paper managed runtime を使わない場合は VoiceCraft backend。
+- Paper managed runtime を使わない場合は VoiceCraft Server 1.7 backend。
 - 有効化した Simple Voice Chat または Plasmo Voice adapters 用の到達可能な UDP ports。
 
-現在の build target:
+現在のビルド対象:
 
 - Paper API `1.21.11-R0.1-SNAPSHOT`
 - Velocity API `3.4.0-SNAPSHOT`
 - BungeeCord API `26.1-R0.1-SNAPSHOT`
 
-## Installation
+## インストール
 
-1. 使用する platform 向けの jar を download または build します。
-2. サーバーの `plugins` directory に配置します。
+1. 使用するプラットフォーム向けの jar をダウンロードまたはビルドします。
+2. サーバーの `plugins` ディレクトリに配置します。
 3. 一度サーバーを起動して `config.yml` を生成します。
 4. VoiceCraft connection と必要な adapters を設定します。
 5. サーバーを再起動するか `/voice reload` を実行します。
 
-Build outputs:
+ビルド成果物:
 
 ```text
 modules/paper/build/libs/VoiceCraft.Java-paper-<version>.jar
@@ -139,7 +142,7 @@ modules/bungeecord/build/libs/VoiceCraft.Java-bungeecord-<version>.jar
 
 `thin` や `sources` classifier のない shaded jars を使用してください。
 
-## Configuration
+## 設定
 
 ### Paper Direct Mode
 
@@ -159,9 +162,9 @@ config:
     shutdown-on-disable: true
 ```
 
-Paper plugin に VoiceCraft を管理させる場合は `auto-start: true` にします。自分で VoiceCraft を実行する場合は `false` にしてください。
+Paper plugin に VoiceCraft を管理させる場合は `auto-start: true` にします。自分で VoiceCraft を実行する場合は `false` にしてください。管理ランチャーは McTcp を有効にして `VoiceCraft.Server` を起動し、設定された transport host、transport port、login token、VoiceCraft voice port を runtime options として渡します。
 
-### Paper Backend Behind Proxy
+### Proxy 配下の Paper Backend
 
 ```yaml
 config:
@@ -184,7 +187,28 @@ config:
 
 Proxy plugin がネットワーク全体の VoiceCraft connection を所有します。
 
-### Voice Settings
+### Proxy UDP Relay
+
+Paper backends が proxy を Plasmo/Simple Voice Chat の public endpoint として広告する場合、Velocity または BungeeCord でこれを有効にします。
+
+```yaml
+config:
+  adapters:
+    plasmo:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24454
+    simple-voice-chat:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24455
+```
+
+Proxy network では、Paper adapter の `public.host` と `public.port` を proxy address と relay port に設定します。Protocol session は Paper adapter が引き続き所有し、proxy は route を登録した backend へ raw UDP packets を転送するだけです。
+
+### Voice 設定
 
 ```yaml
 config:
@@ -227,31 +251,31 @@ config:
         port: 0
 ```
 
-## Commands
+## コマンド
 
-| Command | Permission | Description |
+| コマンド | 権限 | 説明 |
 | --- | --- | --- |
-| `/voice connect <host> <port> <login-token>` | `voice.connect` | Connection settings を保存し VoiceCraft に接続します。 |
-| `/voice reconnect [true\|false]` | `voice.reconnect` | VoiceCraft に再接続します。`true` で force reconnect。 |
+| `/voice connect <host> <port> <login-token>` | `voice.connect` | 接続設定を保存し VoiceCraft に接続します。 |
+| `/voice reconnect [true\|false]` | `voice.reconnect` | VoiceCraft に再接続します。`true` で強制再接続します。 |
 | `/voice disconnect` | `voice.disconnect` | VoiceCraft から切断します。 |
 | `/voice bind <key>` | `voice.bind` | 現在の Minecraft player を VoiceCraft client entity に bind します。 |
 | `/voice bindfake <key> <name>` | `voice.bindfake` | VoiceCraft entity を fake player name に bind します。 |
-| `/voice reload` | `voice.reload` | Config を reload し settings を適用します。 |
+| `/voice reload` | `voice.reload` | Config を再読み込みし、設定を適用します。 |
 
-## Project Structure
+## プロジェクト構成
 
 ```text
 modules/
-  core/                             Shared VoiceCraft protocol, session, proxy, config, localization code
-  adapter-api/                      Shared adapter contracts for audio and entity identity
+  core/                             VoiceCraft protocol、session、proxy、config、localization の共有コード
+  adapter-api/                      audio と entity identity 用の共有 adapter contract
   adapter-simplevoicechat-protocol/ Simple Voice Chat packet/session protocol support
   adapter-plasmo-protocol/          Plasmo Voice packet/session protocol support
-  paper/                            Paper plugin, managed runtime, adapters, backend mode
+  paper/                            Paper plugin、managed runtime、adapters、backend mode
   velocity/                         Velocity proxy plugin
   bungeecord/                       BungeeCord proxy plugin
 ```
 
-## Building
+## ビルド
 
 ```bash
 ./gradlew clean build
@@ -263,27 +287,27 @@ Windows:
 .\gradlew.bat clean build
 ```
 
-Tests:
+テスト:
 
 ```bash
 ./gradlew test
 ```
 
-## Links
+## リンク
 
-- Project site: https://java.voicecraft.chat
-- Wiki / Docs: https://java.voicecraft.chat/docs
-- Contribution guide: https://java.voicecraft.chat/docs/contribution
+- プロジェクトサイト: https://java.voicecraft.chat
+- Wiki / ドキュメント: https://java.voicecraft.chat/docs
+- コントリビューションガイド: https://java.voicecraft.chat/docs/contribution
 
-## Third-Party Projects
+## サードパーティプロジェクト
 
 VoiceCraft.Java は以下の voice chat projects 向け compatibility layers を実装しています。これらはそれぞれ独立した upstream projects であり、各自の repositories と licenses を持ちます。
 
-| Project | Repository | License |
+| プロジェクト | リポジトリ | ライセンス |
 | --- | --- | --- |
 | Simple Voice Chat | https://github.com/henkelmax/simple-voice-chat | Copyright (c) Max Henkel - All Rights Reserved |
 | Plasmo Voice | https://github.com/plasmoapp/plasmo-voice | LGPL-3.0 |
 
-## License
+## ライセンス
 
 VoiceCraft.Java は GNU Affero General Public License v3.0 or later の下でライセンスされています。詳細は [LICENSE](LICENSE) を参照してください。

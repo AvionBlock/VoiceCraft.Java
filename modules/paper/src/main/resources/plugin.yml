@@ -3,7 +3,7 @@ name: VoiceCraft.Java
 version: 0.1.0-SNAPSHOT
 
 main: team.avion.paper.VoiceCraftJava
-description: Plugin that adds support for using VoiceCraft on Java servers.
+description: Java-side VoiceCraft bridge with Paper adapters, proxy networking, and managed runtime support.
 
 author: lil-jon-crunk
 website: https://java.voicecraft.chat

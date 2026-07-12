@@ -14,15 +14,15 @@ config:
       bind-host: "0.0.0.0"       # UDP bind address for Plasmo clients
       port: 24454                # UDP port for Plasmo clients
       public:
-        host: "0.0.0.0"          # Host sent to Plasmo clients; 0.0.0.0 means Minecraft server host
-        port: 0                  # Port sent to Plasmo clients; 0 uses the UDP port above
+        host: "0.0.0.0"          # Host sent to Plasmo clients; use the proxy host behind Velocity/Bungee
+        port: 0                  # Port sent to Plasmo clients; 0 uses the UDP port above, or set proxy relay port
     simple-voice-chat:
       enabled: false             # Enable Simple Voice Chat client compatibility
       bind-host: "0.0.0.0"       # UDP bind address for Simple Voice Chat clients
       port: 24455                # UDP port for Simple Voice Chat clients
       public:
-        host: ""                 # Voice host sent to clients; empty means Minecraft server host
-        port: 0                  # Port sent to clients; 0 uses the UDP port above
+        host: ""                 # Voice host sent to clients; use the proxy host behind Velocity/Bungee
+        port: 0                  # Port sent to clients; 0 uses the UDP port above, or set proxy relay port
       compatibility-version: 20  # Simple Voice Chat compatibility version
       mtu-size: 1024             # Maximum incoming Opus payload size
       keep-alive-ms: 1000        # UDP keep-alive interval

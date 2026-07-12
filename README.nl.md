@@ -4,13 +4,13 @@
 
 VoiceCraft.Java is een ultieme voicechat-plugin voor Java Minecraft-servers.
 
-Het maakt van VoiceCraft een serverbrede voice-laag waarin spelers met verschillende voiceclients dezelfde proximity voice-ruimte delen. Simple Voice Chat-gebruikers, Plasmo Voice-gebruikers en spelers die via de VoiceCraft client verbonden zijn, kunnen elkaar via dezelfde backend horen en met elkaar praten.
+Het maakt van VoiceCraft een serverbrede spraaklaag waarin spelers met verschillende voiceclients dezelfde proximity voice-ruimte delen. Simple Voice Chat-gebruikers, Plasmo Voice-gebruikers en spelers die via de VoiceCraft client verbonden zijn, kunnen elkaar via dezelfde backend horen en met elkaar praten.
 
-Dit is vooral nuttig voor cross-play servers: Bedrock-spelers kunnen een Java-server joinen en de VoiceCraft client gebruiken voor voicechat, terwijl Java-spelers vertrouwde clients zoals Simple Voice Chat of Plasmo Voice kunnen blijven gebruiken.
+Dit is vooral nuttig voor cross-play servers: Bedrock-spelers kunnen een Java-server betreden en de VoiceCraft client gebruiken voor voicechat, terwijl Java-spelers vertrouwde clients zoals Simple Voice Chat of Plasmo Voice kunnen blijven gebruiken.
 
 ## Het Idee
 
-VoiceCraft is de audio-engine. VoiceCraft.Java is de Minecraft-side plugin die ervoor zorgt dat die engine je server begrijpt.
+VoiceCraft is de audio-engine. VoiceCraft.Java is de Minecraft-side plugin die ervoor zorgt dat die engine de staat van je server begrijpt.
 
 De plugin is verantwoordelijk voor:
 
@@ -27,11 +27,11 @@ In de praktijk is VoiceCraft.Java niet zomaar "een bridge naar VoiceCraft". Het 
 | Spelerclient | Ondersteund via | Wat de plugin doet |
 | --- | --- | --- |
 | VoiceCraft client | VoiceCraft backend + `/voice bind` | Bindt de externe VoiceCraft-sessie aan de speler in Minecraft en werkt positie/effecten bij. |
-| Simple Voice Chat | Paper adapter | Verwerkt plugin-message/UDP handshake, maakt een VoiceCraft entity en forwardt Opus audio. |
-| Plasmo Voice | Paper adapter | Verwerkt het Plasmo TCP/UDP protocol, maakt een VoiceCraft entity en forwardt Opus audio. |
+| Simple Voice Chat | Paper adapter | Verwerkt de plugin-message/UDP-handshake, maakt een VoiceCraft entity en stuurt Opus-audio door. |
+| Plasmo Voice | Paper adapter | Verwerkt het Plasmo TCP/UDP-protocol, maakt een VoiceCraft entity en stuurt Opus-audio door. |
 | Bedrock-spelers op Java cross-play servers | VoiceCraft client | Geeft Bedrock-spelers voicechat zonder Java client mods. |
 
-Wanneer ze samen op Paper zijn ingeschakeld, worden Simple Voice Chat en Plasmo Voice clients verbonden met dezelfde VoiceCraft audio bridge. Een speler die via Simple Voice Chat spreekt, kan worden gehoord door Plasmo Voice- en VoiceCraft-clientgebruikers, en andersom.
+Wanneer ze samen op Paper zijn ingeschakeld, worden Simple Voice Chat- en Plasmo Voice-clients verbonden met dezelfde VoiceCraft audio bridge. Een speler die via Simple Voice Chat spreekt, is hoorbaar voor Plasmo Voice- en VoiceCraft-clientgebruikers, en andersom.
 
 ## Belangrijkste Features
 
@@ -39,15 +39,16 @@ Wanneer ze samen op Paper zijn ingeschakeld, worden Simple Voice Chat en Plasmo 
 - Voicechat voor Bedrock-spelers op Java cross-play servers via de VoiceCraft client.
 - Direct Paper mode voor single-server setups.
 - Velocity en BungeeCord proxy mode voor multi-server netwerken.
-- Managed VoiceCraft runtime op Paper: automatische download, startup, config sync en shutdown.
-- Server-side player positioning, dimension tracking, proximity distance, cave echo en muffle updates.
+- Proxy UDP relay voor Simple Voice Chat en Plasmo Voice in Velocity/BungeeCord-netwerken.
+- Beheerde VoiceCraft Server 1.7-runtime op Paper: automatische download, opstarten, synchronisatie van runtime-opties en afsluiten.
+- Server-side player positioning, dimension tracking, proximity distance, cave echo en muffle-updates.
 - Binding flow voor externe VoiceCraft clients met korte in-game bind keys.
 - Gelokaliseerde config/message templates: `en`, `ru`, `nl`, `ja`.
 - Optionele PlaceholderAPI support op Paper.
 
 ## Hoe Het Werkt
 
-### VoiceCraft Client Flow
+### VoiceCraft Client-flow
 
 Spelers met de VoiceCraft client verbinden met de VoiceCraft backend. VoiceCraft.Java bindt daarna die externe voice entity aan de Minecraft-speler.
 
@@ -66,7 +67,7 @@ Typische flow:
 
 Dit is de primaire route voor spelers die geen Java voice mods kunnen gebruiken, inclusief Bedrock-spelers.
 
-### Simple Voice Chat en Plasmo Voice Flow
+### Simple Voice Chat- en Plasmo Voice-flow
 
 Op Paper kan VoiceCraft.Java als compatibility server voor Java voice mods werken.
 
@@ -78,7 +79,7 @@ VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio b
 
 De adapters spreken de clientprotocollen, beheren UDP-sessies en sturen Opus frames naar de gedeelde VoiceCraft audio bridge. Audio die terugkomt van VoiceCraft wordt naar de geregistreerde adapters gestuurd, zodat spelers op verschillende clients aan hetzelfde gesprek kunnen deelnemen.
 
-## Runtime Modes
+## Runtime-modi
 
 ### Direct Paper Mode
 
@@ -96,24 +97,26 @@ De Paper-plugin beheert de VoiceCraft-verbinding. Hij kan verbinden met een best
 Paper backends -> Velocity/BungeeCord -> VoiceCraft
 ```
 
-Gebruik dit voor netwerken met meerdere backend servers.
+Gebruik dit voor netwerken met meerdere backendservers.
 
 Installeer VoiceCraft.Java op elke Paper backend en op de proxy. De proxy beheert de VoiceCraft-verbinding, terwijl Paper backends player snapshots en bind/unbind requests versturen via het `voicecraft-java:main` plugin channel.
 
-## Platform Support
+Simple Voice Chat- en Plasmo Voice-audio blijft in proxy mode UDP. Paper registreert voice routes via `voicecraft-java:main`, terwijl Velocity/BungeeCord publieke UDP relay-poorten opent en raw voice datagrams doorstuurt naar de huidige backend Paper adapter.
+
+## Platformondersteuning
 
 | Platform | Rol |
 | --- | --- |
-| Paper | Direct runtime, backend runtime, managed VoiceCraft process, Simple Voice Chat adapter, Plasmo Voice adapter |
-| Velocity | Proxy runtime en centrale VoiceCraft-verbinding |
-| BungeeCord | Proxy runtime en centrale VoiceCraft-verbinding |
+| Paper | Direct runtime, backendruntime, beheerd VoiceCraft Server-proces, Simple Voice Chat-adapter, Plasmo Voice-adapter |
+| Velocity | Proxyruntime, centrale VoiceCraft-verbinding, UDP-relay voor Simple Voice Chat / Plasmo |
+| BungeeCord | Proxyruntime, centrale VoiceCraft-verbinding, UDP-relay voor Simple Voice Chat / Plasmo |
 
 ## Vereisten
 
 - Java 21.
 - Paper, Velocity of BungeeCord.
-- VoiceCraft backend, tenzij Paper managed runtime is ingeschakeld.
-- Bereikbare UDP-poorten voor ingeschakelde Simple Voice Chat of Plasmo Voice adapters.
+- VoiceCraft Server 1.7-backend, tenzij de beheerde Paper-runtime is ingeschakeld.
+- Bereikbare UDP-poorten voor ingeschakelde Simple Voice Chat- of Plasmo Voice-adapters.
 
 Het project wordt momenteel gebouwd tegen:
 
@@ -123,13 +126,13 @@ Het project wordt momenteel gebouwd tegen:
 
 ## Installatie
 
-1. Download of build de jar voor je platform.
+1. Download of bouw de jar voor je platform.
 2. Plaats hem in de `plugins` directory van de server.
 3. Start de server een keer om `config.yml` te genereren.
 4. Configureer de VoiceCraft-verbinding en de benodigde adapters.
 5. Herstart de server of voer `/voice reload` uit.
 
-Build outputs:
+Buildartefacten:
 
 ```text
 modules/paper/build/libs/VoiceCraft.Java-paper-<version>.jar
@@ -137,7 +140,7 @@ modules/velocity/build/libs/VoiceCraft.Java-velocity-<version>.jar
 modules/bungeecord/build/libs/VoiceCraft.Java-bungeecord-<version>.jar
 ```
 
-Gebruik de shaded jars zonder `thin` of `sources` classifier.
+Gebruik de shaded jars zonder `thin`- of `sources`-classifier.
 
 ## Configuratie
 
@@ -159,9 +162,9 @@ config:
     shutdown-on-disable: true
 ```
 
-Zet `auto-start: true` als de Paper-plugin VoiceCraft moet beheren. Zet het op `false` als je VoiceCraft zelf runt.
+Zet `auto-start: true` als de Paper-plugin VoiceCraft moet beheren. Zet het op `false` als je VoiceCraft zelf draait. De beheerde launcher start `VoiceCraft.Server` met McTcp ingeschakeld en geeft de ingestelde transporthost, transportpoort, login token en VoiceCraft voice port als runtime-opties door.
 
-### Paper Backend Behind Proxy
+### Paper Backend achter Proxy
 
 ```yaml
 config:
@@ -169,7 +172,7 @@ config:
     enabled: true
 ```
 
-In backend mode verbindt Paper niet direct met VoiceCraft. Het stuurt Minecraft player state door naar Velocity of BungeeCord.
+In backendmodus verbindt Paper niet direct met VoiceCraft. Het stuurt de Minecraft player state door naar Velocity of BungeeCord.
 
 ### Velocity of BungeeCord
 
@@ -184,7 +187,28 @@ config:
 
 De proxy-plugin beheert de VoiceCraft-verbinding voor het hele netwerk.
 
-### Voice Settings
+### Proxy UDP Relay
+
+Schakel dit in op Velocity of BungeeCord wanneer Paper backends de proxy als publiek Plasmo/Simple Voice Chat-endpoint adverteren:
+
+```yaml
+config:
+  adapters:
+    plasmo:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24454
+    simple-voice-chat:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24455
+```
+
+Voor proxy-netwerken moeten `public.host` en `public.port` in de Paper-adapter naar het proxy-adres en de relay-poort wijzen. De Paper-adapter blijft eigenaar van de protocolsessie; de proxy routeert alleen raw UDP-packets naar de backend die de route registreerde.
+
+### Voice-instellingen
 
 ```yaml
 config:
@@ -195,7 +219,7 @@ config:
     position-update-interval-ticks: 5
 ```
 
-### Simple Voice Chat Adapter
+### Simple Voice Chat-adapter
 
 ```yaml
 config:
@@ -213,7 +237,7 @@ config:
       allow-recording: true
 ```
 
-### Plasmo Voice Adapter
+### Plasmo Voice-adapter
 
 ```yaml
 config:
@@ -227,28 +251,28 @@ config:
         port: 0
 ```
 
-## Commands
+## Commando's
 
-| Command | Permission | Beschrijving |
+| Commando | Permissie | Beschrijving |
 | --- | --- | --- |
 | `/voice connect <host> <port> <login-token>` | `voice.connect` | Slaat verbindingsinstellingen op en verbindt met VoiceCraft. |
 | `/voice reconnect [true\|false]` | `voice.reconnect` | Verbindt opnieuw met VoiceCraft. Gebruik `true` om reconnect te forceren. |
 | `/voice disconnect` | `voice.disconnect` | Verbreekt de verbinding met VoiceCraft. |
 | `/voice bind <key>` | `voice.bind` | Bindt de huidige Minecraft-speler aan een VoiceCraft client entity. |
 | `/voice bindfake <key> <name>` | `voice.bindfake` | Bindt een VoiceCraft entity aan een fake player name. |
-| `/voice reload` | `voice.reload` | Herlaadt config en past settings toe. |
+| `/voice reload` | `voice.reload` | Herlaadt de configuratie en past instellingen toe. |
 
 ## Projectstructuur
 
 ```text
 modules/
-  core/                             Shared VoiceCraft protocol, session, proxy, config, localization code
-  adapter-api/                      Shared adapter contracts for audio and entity identity
-  adapter-simplevoicechat-protocol/ Simple Voice Chat packet/session protocol support
-  adapter-plasmo-protocol/          Plasmo Voice packet/session protocol support
-  paper/                            Paper plugin, managed runtime, adapters, backend mode
-  velocity/                         Velocity proxy plugin
-  bungeecord/                       BungeeCord proxy plugin
+  core/                             Gedeelde code voor VoiceCraft-protocol, sessies, proxy, config en lokalisatie
+  adapter-api/                      Gedeelde adaptercontracten voor audio en entity identity
+  adapter-simplevoicechat-protocol/ Simple Voice Chat packet/session protocol-ondersteuning
+  adapter-plasmo-protocol/          Plasmo Voice packet/session protocol-ondersteuning
+  paper/                            Paper-plugin, beheerde runtime, adapters, backendmodus
+  velocity/                         Velocity-proxyplugin
+  bungeecord/                       BungeeCord-proxyplugin
 ```
 
 ## Builden
@@ -271,15 +295,15 @@ Tests uitvoeren:
 
 ## Links
 
-- Project site: https://java.voicecraft.chat
-- Wiki / Docs: https://java.voicecraft.chat/docs
-- Contribution guide: https://java.voicecraft.chat/docs/contribution
+- Projectsite: https://java.voicecraft.chat
+- Wiki / documentatie: https://java.voicecraft.chat/docs
+- Bijdragegids: https://java.voicecraft.chat/docs/contribution
 
-## Third-Party Projects
+## Projecten van derden
 
-VoiceCraft.Java implementeert compatibility layers voor deze voicechat-projecten. Het zijn aparte upstream projecten met eigen repositories en licenties.
+VoiceCraft.Java implementeert compatibility layers voor deze voicechat-projecten. Het zijn aparte upstream-projecten met eigen repositories en licenties.
 
-| Project | Repository | License |
+| Project | Repository | Licentie |
 | --- | --- | --- |
 | Simple Voice Chat | https://github.com/henkelmax/simple-voice-chat | Copyright (c) Max Henkel - All Rights Reserved |
 | Plasmo Voice | https://github.com/plasmoapp/plasmo-voice | LGPL-3.0 |

@@ -3,8 +3,8 @@ plugins {
 }
 
 group = 'team.avion'
-version = project.hasProperty('VERSION') ? project.VERSION : '0.1.0-SNAPSHOT'
-description = 'Plugin that adds support for using VoiceCraft on Java servers.'
+version = project.hasProperty('VERSION') ? project.VERSION : '2.0.0-SNAPSHOT'
+description = 'Java-side VoiceCraft bridge with Paper adapters, proxy networking, and managed runtime support.'
 
 ext {
     pluginName = 'VoiceCraft.Java'

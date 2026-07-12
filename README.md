@@ -4,7 +4,7 @@
 
 VoiceCraft.Java is an ultimate voice chat plugin for Java Minecraft servers.
 
-It turns VoiceCraft into a server-wide voice layer where players using different voice clients can share the same proximity voice space. Simple Voice Chat users, Plasmo Voice users, and players connected through the VoiceCraft client can hear and talk to each other through one backend.
+It turns VoiceCraft into a server-wide voice layer where players using different voice clients can share the same proximity voice space. Simple Voice Chat users, Plasmo Voice users, and players connected through the VoiceCraft client can hear and talk to each other through one VoiceCraft backend.
 
 This is especially useful for cross-play servers: Bedrock players can join a Java server and use the VoiceCraft client for voice chat, while Java players can keep using familiar clients such as Simple Voice Chat or Plasmo Voice.
 
@@ -39,7 +39,8 @@ When enabled together on Paper, Simple Voice Chat and Plasmo Voice clients are c
 - Voice chat support for Bedrock players on Java cross-play servers through the VoiceCraft client.
 - Direct Paper mode for single-server setups.
 - Velocity and BungeeCord proxy mode for multi-server networks.
-- Managed VoiceCraft runtime on Paper: automatic download, startup, configuration sync, and shutdown.
+- Proxy UDP relay for Simple Voice Chat and Plasmo Voice in Velocity/BungeeCord networks.
+- Managed VoiceCraft Server 1.7 runtime on Paper: automatic download, startup, runtime option sync, and shutdown.
 - Server-side player positioning, dimension tracking, proximity distance, cave echo, and muffle updates.
 - Binding flow for external VoiceCraft clients with short in-game bind keys.
 - Localized config/message templates: `en`, `ru`, `nl`, `ja`.
@@ -100,19 +101,21 @@ Use this for networks with multiple backend servers.
 
 Install VoiceCraft.Java on every Paper backend and on the proxy. The proxy owns the VoiceCraft connection, while Paper backends send player snapshots and bind/unbind requests through the `voicecraft-java:main` plugin channel.
 
+Simple Voice Chat and Plasmo Voice audio stays on UDP in proxy mode. Paper registers voice routes through `voicecraft-java:main`, while Velocity/BungeeCord exposes public UDP relay ports and forwards raw voice datagrams to the current backend Paper adapter.
+
 ## Platform Support
 
 | Platform | Role |
 | --- | --- |
-| Paper | Direct runtime, backend runtime, managed VoiceCraft process, Simple Voice Chat adapter, Plasmo Voice adapter |
-| Velocity | Proxy runtime and central VoiceCraft connection |
-| BungeeCord | Proxy runtime and central VoiceCraft connection |
+| Paper | Direct runtime, backend runtime, managed VoiceCraft Server process, Simple Voice Chat adapter, Plasmo Voice adapter |
+| Velocity | Proxy runtime, central VoiceCraft connection, Simple Voice Chat / Plasmo UDP relay |
+| BungeeCord | Proxy runtime, central VoiceCraft connection, Simple Voice Chat / Plasmo UDP relay |
 
 ## Requirements
 
 - Java 21.
 - Paper, Velocity, or BungeeCord.
-- VoiceCraft backend, unless Paper managed runtime is enabled.
+- VoiceCraft Server 1.7 backend, unless Paper managed runtime is enabled.
 - Reachable UDP ports for enabled Simple Voice Chat or Plasmo Voice adapters.
 
 The project is currently built against:
@@ -159,7 +162,7 @@ config:
     shutdown-on-disable: true
 ```
 
-Set `auto-start: true` if the Paper plugin should manage VoiceCraft for you. Set it to `false` when running VoiceCraft yourself.
+Set `auto-start: true` if the Paper plugin should manage VoiceCraft for you. Set it to `false` when running VoiceCraft yourself. The managed launcher starts `VoiceCraft.Server` with McTcp enabled and passes the configured transport host, transport port, login token, and VoiceCraft voice port as runtime options.
 
 ### Paper Backend Behind Proxy
 
@@ -183,6 +186,27 @@ config:
 ```
 
 The proxy plugin owns the VoiceCraft connection for the whole network.
+
+### Proxy UDP Relay
+
+Enable these on Velocity or BungeeCord when Paper backends advertise the proxy as the public Plasmo/Simple Voice Chat endpoint:
+
+```yaml
+config:
+  adapters:
+    plasmo:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24454
+    simple-voice-chat:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24455
+```
+
+For proxy networks, set the Paper adapter `public.host` and `public.port` to the proxy address and relay port. The Paper adapter still owns the protocol session; the proxy only routes raw UDP packets to the backend that registered the route.
 
 ### Voice Settings
 

@@ -4,52 +4,53 @@
 
 VoiceCraft.Java - ультимативный плагин голосового чата для Java Minecraft серверов.
 
-Он превращает VoiceCraft в общий серверный голосовой слой, где игроки с разными голосовыми клиентами могут находиться в одном proximity voice пространстве. Пользователи Simple Voice Chat, Plasmo Voice и игроки, подключенные через VoiceCraft client, могут слышать и говорить друг с другом через один backend.
+Он превращает VoiceCraft в общий серверный голосовой слой, где игроки с разными голосовыми клиентами находятся в одном пространстве proximity voice. Пользователи Simple Voice Chat, Plasmo Voice и игроки, подключенные через VoiceCraft client, могут слышать друг друга и говорить через один VoiceCraft backend.
 
-Это особенно полезно для cross-play серверов: Bedrock игроки могут заходить на Java сервер и использовать VoiceCraft client для голосового чата, а Java игроки могут продолжать пользоваться привычными клиентами вроде Simple Voice Chat или Plasmo Voice.
+Это особенно полезно для cross-play серверов: Bedrock-игроки могут заходить на Java-сервер и использовать VoiceCraft client для голосового чата, а Java-игроки могут продолжать пользоваться привычными клиентами вроде Simple Voice Chat или Plasmo Voice.
 
 ## Идея
 
-VoiceCraft - это аудио-движок. VoiceCraft.Java - Minecraft-side плагин, который помогает этому движку понимать ваш сервер.
+VoiceCraft - это аудиодвижок. VoiceCraft.Java - Minecraft-side плагин, который помогает этому движку понимать состояние вашего сервера.
 
 Плагин отвечает за:
 
 - подключение Paper, Velocity или BungeeCord к VoiceCraft backend;
 - создание VoiceCraft сущностей и их привязку к Minecraft игрокам;
-- синхронизацию имен, миров, позиций, поворота, proximity, cave echo и muffle состояния;
+- синхронизацию имен, миров, позиций, поворота, proximity, cave echo и muffle-состояния;
 - маршрутизацию аудио между поддерживаемыми клиентами через VoiceCraft audio bridge;
-- поддержку одиночных Paper серверов и multi-server proxy сетей.
+- поддержку одиночных Paper-серверов и multi-server proxy-сетей.
 
-На практике VoiceCraft.Java - это не просто мост к VoiceCraft. Это control layer, который позволяет нескольким voice-экосистемам работать вместе на одном Minecraft сервере.
+На практике VoiceCraft.Java - это не просто мост к VoiceCraft. Это control layer, который позволяет нескольким voice-экосистемам работать вместе на одном Minecraft-сервере.
 
 ## Что могут использовать игроки
 
 | Клиент игрока | Поддерживается через | Что делает плагин |
 | --- | --- | --- |
 | VoiceCraft client | VoiceCraft backend + `/voice bind` | Привязывает внешнюю VoiceCraft сессию к игроку в Minecraft и обновляет позицию/эффекты. |
-| Simple Voice Chat | Paper adapter | Обрабатывает plugin-message/UDP handshake, создает VoiceCraft сущность и пересылает Opus аудио. |
-| Plasmo Voice | Paper adapter | Обрабатывает Plasmo TCP/UDP protocol, создает VoiceCraft сущность и пересылает Opus аудио. |
-| Bedrock игроки на Java cross-play серверах | VoiceCraft client | Дает Bedrock игрокам голосовой чат без Java client mods. |
+| Simple Voice Chat | Paper adapter | Обрабатывает plugin-message/UDP handshake, создает VoiceCraft-сущность и пересылает Opus-аудио. |
+| Plasmo Voice | Paper adapter | Обрабатывает Plasmo TCP/UDP protocol, создает VoiceCraft-сущность и пересылает Opus-аудио. |
+| Bedrock-игроки на Java cross-play серверах | VoiceCraft client | Дает Bedrock-игрокам голосовой чат без Java client mods. |
 
-Если адаптеры включены вместе на Paper, клиенты Simple Voice Chat и Plasmo Voice подключаются к одному VoiceCraft audio bridge. Игрок из Simple Voice Chat может быть услышан игроками Plasmo Voice и VoiceCraft client, и наоборот.
+Если адаптеры включены вместе на Paper, клиенты Simple Voice Chat и Plasmo Voice подключаются к одному VoiceCraft audio bridge. Игрока из Simple Voice Chat слышат игроки Plasmo Voice и VoiceCraft client, и наоборот.
 
 ## Основные возможности
 
 - Единый proximity voice chat для VoiceCraft client, Simple Voice Chat и Plasmo Voice.
-- Голосовой чат для Bedrock игроков на Java cross-play серверах через VoiceCraft client.
+- Голосовой чат для Bedrock-игроков на Java cross-play серверах через VoiceCraft client.
 - Direct Paper mode для одиночных серверов.
 - Velocity и BungeeCord proxy mode для multi-server сетей.
-- Managed VoiceCraft runtime на Paper: автоматическая загрузка, запуск, синхронизация конфигурации и остановка.
+- Proxy UDP relay для Simple Voice Chat и Plasmo Voice в Velocity/BungeeCord сетях.
+- Управляемый VoiceCraft Server 1.7 рантайм на Paper: автоматическая загрузка, запуск, синхронизация runtime options и остановка.
 - Server-side позиционирование игроков, отслеживание dimension, proximity distance, cave echo и muffle updates.
-- Binding flow для внешних VoiceCraft клиентов с короткими in-game bind keys.
+- Binding flow для внешних VoiceCraft-клиентов с короткими in-game bind keys.
 - Локализованные config/message templates: `en`, `ru`, `nl`, `ja`.
-- Optional PlaceholderAPI support на Paper.
+- Опциональная поддержка PlaceholderAPI на Paper.
 
 ## Как это работает
 
-### VoiceCraft Client Flow
+### Поток VoiceCraft Client
 
-Игроки с VoiceCraft client подключаются к VoiceCraft backend. Затем VoiceCraft.Java привязывает внешнюю голосовую сущность к Minecraft игроку.
+Игроки с VoiceCraft client подключаются к VoiceCraft backend. Затем VoiceCraft.Java привязывает внешнюю голосовую сущность к Minecraft-игроку.
 
 ```text
 VoiceCraft client -> VoiceCraft backend <- VoiceCraft.Java <- Minecraft server
@@ -61,12 +62,12 @@ VoiceCraft client -> VoiceCraft backend <- VoiceCraft.Java <- Minecraft server
 2. VoiceCraft создает новую network entity.
 3. VoiceCraft.Java получает эту entity и назначает короткий binding key.
 4. Игрок выполняет `/voice bind <key>` в Minecraft.
-5. VoiceCraft.Java связывает голосовую entity с Minecraft игроком.
+5. VoiceCraft.Java связывает голосовую entity с Minecraft-игроком.
 6. Плагин постоянно обновляет world, position, rotation и voice effects этой entity.
 
-Это основной путь для игроков, которые не могут использовать Java voice mods, включая Bedrock игроков.
+Это основной путь для игроков, которые не могут использовать Java voice mods, включая Bedrock-игроков.
 
-### Simple Voice Chat и Plasmo Voice Flow
+### Поток Simple Voice Chat и Plasmo Voice
 
 На Paper VoiceCraft.Java может выступать compatibility server для Java voice mods.
 
@@ -76,9 +77,9 @@ Plasmo Voice client       -> VoiceCraft.Java Paper adapter -> VoiceCraft audio b
 VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio bridge
 ```
 
-Адаптеры говорят на протоколах клиентов, управляют UDP сессиями и передают Opus frames в общий VoiceCraft audio bridge. Аудио, приходящее обратно из VoiceCraft, рассылается зарегистрированным адаптерам, поэтому игроки на разных клиентах могут участвовать в одном разговоре.
+Адаптеры говорят на протоколах клиентов, управляют UDP-сессиями и передают Opus frames в общий VoiceCraft audio bridge. Аудио, приходящее обратно из VoiceCraft, рассылается зарегистрированным адаптерам, поэтому игроки на разных клиентах могут участвовать в одном разговоре.
 
-## Runtime Modes
+## Режимы работы
 
 ### Direct Paper Mode
 
@@ -86,9 +87,9 @@ VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio b
 Paper -> VoiceCraft.Java -> VoiceCraft
 ```
 
-Используйте для одиночного Paper сервера.
+Используйте для одиночного Paper-сервера.
 
-Paper плагин владеет подключением к VoiceCraft. Он может подключиться к уже запущенному VoiceCraft backend или автоматически скачать и запустить VoiceCraft runtime.
+Paper-плагин владеет подключением к VoiceCraft. Он может подключиться к уже запущенному VoiceCraft backend или автоматически скачать и запустить VoiceCraft runtime.
 
 ### Proxy Mode
 
@@ -96,26 +97,28 @@ Paper плагин владеет подключением к VoiceCraft. Он �
 Paper backends -> Velocity/BungeeCord -> VoiceCraft
 ```
 
-Используйте для сетей с несколькими backend серверами.
+Используйте для сетей с несколькими backend-серверами.
 
 Установите VoiceCraft.Java на каждый Paper backend и на proxy. Proxy владеет подключением к VoiceCraft, а Paper backends отправляют player snapshots и bind/unbind requests через plugin channel `voicecraft-java:main`.
+
+Аудио Simple Voice Chat и Plasmo Voice в proxy mode остается UDP. Paper регистрирует voice routes через `voicecraft-java:main`, а Velocity/BungeeCord открывает публичные UDP relay-порты и пересылает сырые voice datagrams на текущий backend Paper adapter.
 
 ## Поддержка платформ
 
 | Платформа | Роль |
 | --- | --- |
-| Paper | Direct runtime, backend runtime, managed VoiceCraft process, Simple Voice Chat adapter, Plasmo Voice adapter |
-| Velocity | Proxy runtime и центральное подключение к VoiceCraft |
-| BungeeCord | Proxy runtime и центральное подключение к VoiceCraft |
+| Paper | Direct runtime, backend runtime, управляемый процесс VoiceCraft Server, адаптер Simple Voice Chat, адаптер Plasmo Voice |
+| Velocity | Proxy runtime, центральное подключение к VoiceCraft, UDP relay для Simple Voice Chat / Plasmo |
+| BungeeCord | Proxy runtime, центральное подключение к VoiceCraft, UDP relay для Simple Voice Chat / Plasmo |
 
 ## Требования
 
 - Java 21.
 - Paper, Velocity или BungeeCord.
-- VoiceCraft backend, если Paper managed runtime не включен.
-- Доступные UDP порты для включенных Simple Voice Chat или Plasmo Voice adapters.
+- VoiceCraft Server 1.7 backend, если управляемый runtime Paper не включен.
+- Доступные UDP-порты для включенных адаптеров Simple Voice Chat или Plasmo Voice.
 
-Проект сейчас собирается против:
+Проект сейчас собирается с:
 
 - Paper API `1.21.11-R0.1-SNAPSHOT`
 - Velocity API `3.4.0-SNAPSHOT`
@@ -129,7 +132,7 @@ Paper backends -> Velocity/BungeeCord -> VoiceCraft
 4. Настройте подключение к VoiceCraft и нужные адаптеры.
 5. Перезапустите сервер или выполните `/voice reload`.
 
-Build outputs:
+Артефакты сборки:
 
 ```text
 modules/paper/build/libs/VoiceCraft.Java-paper-<version>.jar
@@ -137,7 +140,7 @@ modules/velocity/build/libs/VoiceCraft.Java-velocity-<version>.jar
 modules/bungeecord/build/libs/VoiceCraft.Java-bungeecord-<version>.jar
 ```
 
-Используйте shaded jars без classifier `thin` или `sources`.
+Используйте shaded jars без классификаторов `thin` или `sources`.
 
 ## Конфигурация
 
@@ -159,9 +162,9 @@ config:
     shutdown-on-disable: true
 ```
 
-Установите `auto-start: true`, если Paper плагин должен управлять VoiceCraft. Установите `false`, если запускаете VoiceCraft самостоятельно.
+Установите `auto-start: true`, если Paper-плагин должен управлять VoiceCraft. Установите `false`, если запускаете VoiceCraft самостоятельно. Управляемый launcher запускает `VoiceCraft.Server` с включенным McTcp и передает настроенные transport host, transport port, login token и VoiceCraft voice port как runtime options.
 
-### Paper Backend Behind Proxy
+### Paper Backend за Proxy
 
 ```yaml
 config:
@@ -169,7 +172,7 @@ config:
     enabled: true
 ```
 
-В backend mode Paper не подключается к VoiceCraft напрямую. Он пересылает состояние Minecraft игроков на Velocity или BungeeCord.
+В backend mode Paper не подключается к VoiceCraft напрямую. Он пересылает состояние Minecraft-игроков на Velocity или BungeeCord.
 
 ### Velocity или BungeeCord
 
@@ -184,7 +187,28 @@ config:
 
 Proxy плагин владеет подключением к VoiceCraft для всей сети.
 
-### Voice Settings
+### Proxy UDP Relay
+
+Включите это на Velocity или BungeeCord, когда Paper backends рекламируют proxy как публичный endpoint для Plasmo/Simple Voice Chat:
+
+```yaml
+config:
+  adapters:
+    plasmo:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24454
+    simple-voice-chat:
+      proxy:
+        enabled: true
+        bind-host: "0.0.0.0"
+        port: 24455
+```
+
+Для proxy-сетей настройте `public.host` и `public.port` в Paper-адаптере на адрес и relay port прокси. Paper-адаптер по-прежнему владеет protocol session; proxy только маршрутизирует raw UDP packets на backend, который зарегистрировал route.
+
+### Настройки голоса
 
 ```yaml
 config:
@@ -195,7 +219,7 @@ config:
     position-update-interval-ticks: 5
 ```
 
-### Simple Voice Chat Adapter
+### Адаптер Simple Voice Chat
 
 ```yaml
 config:
@@ -213,7 +237,7 @@ config:
       allow-recording: true
 ```
 
-### Plasmo Voice Adapter
+### Адаптер Plasmo Voice
 
 ```yaml
 config:
@@ -229,26 +253,26 @@ config:
 
 ## Команды
 
-| Команда | Permission | Описание |
+| Команда | Разрешение | Описание |
 | --- | --- | --- |
 | `/voice connect <host> <port> <login-token>` | `voice.connect` | Сохранить настройки подключения и подключиться к VoiceCraft. |
 | `/voice reconnect [true\|false]` | `voice.reconnect` | Переподключиться к VoiceCraft. Используйте `true` для force reconnect. |
 | `/voice disconnect` | `voice.disconnect` | Отключиться от VoiceCraft. |
-| `/voice bind <key>` | `voice.bind` | Привязать текущего Minecraft игрока к VoiceCraft client entity. |
+| `/voice bind <key>` | `voice.bind` | Привязать текущего Minecraft-игрока к VoiceCraft client entity. |
 | `/voice bindfake <key> <name>` | `voice.bindfake` | Привязать VoiceCraft entity к fake player name. |
-| `/voice reload` | `voice.reload` | Перезагрузить config и применить settings. |
+| `/voice reload` | `voice.reload` | Перезагрузить config и применить настройки. |
 
 ## Структура проекта
 
 ```text
 modules/
-  core/                             Shared VoiceCraft protocol, session, proxy, config, localization code
-  adapter-api/                      Shared adapter contracts for audio and entity identity
-  adapter-simplevoicechat-protocol/ Simple Voice Chat packet/session protocol support
-  adapter-plasmo-protocol/          Plasmo Voice packet/session protocol support
-  paper/                            Paper plugin, managed runtime, adapters, backend mode
-  velocity/                         Velocity proxy plugin
-  bungeecord/                       BungeeCord proxy plugin
+  core/                             Общий код протокола VoiceCraft, сессий, proxy, config и локализации
+  adapter-api/                      Общие контракты адаптеров для аудио и идентичности сущностей
+  adapter-simplevoicechat-protocol/ Поддержка packet/session protocol Simple Voice Chat
+  adapter-plasmo-protocol/          Поддержка packet/session protocol Plasmo Voice
+  paper/                            Paper-плагин, managed runtime, адаптеры, backend mode
+  velocity/                         Proxy-плагин Velocity
+  bungeecord/                       Proxy-плагин BungeeCord
 ```
 
 ## Сборка
@@ -271,15 +295,15 @@ modules/
 
 ## Ссылки
 
-- Project site: https://java.voicecraft.chat
-- Wiki / Docs: https://java.voicecraft.chat/docs
-- Contribution guide: https://java.voicecraft.chat/docs/contribution
+- Сайт проекта: https://java.voicecraft.chat
+- Wiki / документация: https://java.voicecraft.chat/docs
+- Руководство для контрибьюторов: https://java.voicecraft.chat/docs/contribution
 
-## Third-Party Projects
+## Сторонние проекты
 
-VoiceCraft.Java реализует compatibility layers для этих voice chat проектов. Это отдельные upstream проекты со своими репозиториями и лицензиями.
+VoiceCraft.Java реализует compatibility layers для этих voice chat проектов. Это отдельные upstream-проекты со своими репозиториями и лицензиями.
 
-| Project | Repository | License |
+| Проект | Репозиторий | Лицензия |
 | --- | --- | --- |
 | Simple Voice Chat | https://github.com/henkelmax/simple-voice-chat | Copyright (c) Max Henkel - All Rights Reserved |
 | Plasmo Voice | https://github.com/plasmoapp/plasmo-voice | LGPL-3.0 |

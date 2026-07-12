@@ -5,7 +5,7 @@ plugins {
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
-description = 'Velocity adapter for VoiceCraft.Java.'
+description = 'Velocity proxy runtime, VoiceCraft connection, and UDP relay for VoiceCraft.Java.'
 
 dependencies {
     implementation project(':core')

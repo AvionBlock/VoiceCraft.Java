@@ -27,11 +27,11 @@ config:
   adapters:
     plasmo:
       proxy:
-        enabled: false
-        bind-host: "0.0.0.0"
-        port: 24454
+        enabled: false # この proxy で Plasmo Voice UDP relay を有効化
+        bind-host: "0.0.0.0" # Plasmo clients 用 UDP bind address
+        port: 24454 # Paper public.port で広告する public UDP relay port
     simple-voice-chat:
       proxy:
-        enabled: false
-        bind-host: "0.0.0.0"
-        port: 24455
+        enabled: false # この proxy で Simple Voice Chat UDP relay を有効化
+        bind-host: "0.0.0.0" # Simple Voice Chat clients 用 UDP bind address
+        port: 24455 # Paper public.port で広告する public UDP relay port

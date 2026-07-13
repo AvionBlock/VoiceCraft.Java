@@ -2,11 +2,11 @@
 
 [English](README.md) | [Русский](README.ru.md) | [Nederlands](README.nl.md) | [日本語](README.ja.md)
 
-VoiceCraft.Java - ультимативный плагин голосового чата для Java Minecraft серверов.
+VoiceCraft.Java — ультимативный плагин совместимости голосового чата для Java Minecraft-серверов.
 
 Он превращает VoiceCraft в общий серверный голосовой слой, где игроки с разными голосовыми клиентами находятся в одном пространстве proximity voice. Пользователи Simple Voice Chat, Plasmo Voice и игроки, подключенные через VoiceCraft client, могут слышать друг друга и говорить через один VoiceCraft backend.
 
-Это особенно полезно для cross-play серверов: Bedrock-игроки могут заходить на Java-сервер и использовать VoiceCraft client для голосового чата, а Java-игроки могут продолжать пользоваться привычными клиентами вроде Simple Voice Chat или Plasmo Voice.
+Это особенно полезно для cross-play серверов: Bedrock-игроки могут заходить через Geyser и использовать отдельный VoiceCraft client, а Java-игроки — продолжать пользоваться Simple Voice Chat или Plasmo Voice. Игроки без этих Java-модов получают небольшой vanilla-совместимый статус, который виден и через Geyser.
 
 ## Идея
 
@@ -43,7 +43,8 @@ VoiceCraft - это аудиодвижок. VoiceCraft.Java - Minecraft-side п�
 - Управляемый VoiceCraft Server 1.7 рантайм на Paper: автоматическая загрузка, запуск, синхронизация runtime options и остановка.
 - Server-side позиционирование игроков, отслеживание dimension, proximity distance, cave echo и muffle updates.
 - Binding flow для внешних VoiceCraft-клиентов с короткими in-game bind keys.
-- Локализованные config/message templates: `en`, `ru`, `nl`, `ja`.
+- Персональная vanilla-индикация для Java- и Bedrock-игроков без модов; клиенты с SVC/Plasmo видят только родной интерфейс без дублирования.
+- Переводы сообщений для `en`, `de`, `ru`, `nl`, `pl`, `ja`, `th`, `zh_CN` и `zh_TW`; локализованные шаблоны конфига для `en`, `ru`, `nl` и `ja`.
 
 ## Как это работает
 
@@ -77,6 +78,8 @@ VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio b
 ```
 
 Адаптеры говорят на протоколах клиентов, управляют UDP-сессиями и передают Opus frames в общий VoiceCraft audio bridge. Аудио, приходящее обратно из VoiceCraft, рассылается зарегистрированным адаптерам, поэтому игроки на разных клиентах могут участвовать в одном разговоре.
+
+Общий контракт совместимости охватывает proximity-аудио, identity, speaking lifecycle и голосовые состояния игроков. Эксклюзивные функции отдельных клиентов, например приватные группы Simple Voice Chat, остаются внутри своей экосистемы и намеренно не транслируются между разными клиентами. Не устанавливайте оригинальный серверный плагин SVC или Plasmo на тот же Paper-сервер, если соответствующий адаптер VoiceCraft.Java уже владеет его портом.
 
 ## Режимы работы
 
@@ -130,6 +133,8 @@ Paper backends -> Velocity/BungeeCord -> VoiceCraft
 3. Запустите сервер один раз, чтобы сгенерировать `config.yml`.
 4. Настройте подключение к VoiceCraft и нужные адаптеры.
 5. Перезапустите сервер или выполните `/voice reload`.
+
+Оба адаптера по умолчанию выключены. После включения VoiceCraft.Java становится серверной точкой подключения для соответствующего клиентского мода, поэтому его UDP-порт должен быть доступен игрокам и не должен быть занят оригинальным voice-chat плагином.
 
 Артефакты сборки:
 
@@ -216,7 +221,19 @@ config:
     proximity-toggle: true
     voice-effects: true
     position-update-interval-ticks: 5
+
+    vanilla-status-overlay:
+      enabled: true
+      handshake-grace-ticks: 60
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
 ```
+
+Vanilla overlay использует невидимые по умолчанию ArmorStand вместо display entities. Статус показывается только тогда, когда и наблюдатель, и цель не используют SVC/Plasmo, поэтому он не перекрывает родную индикацию модов. Символы, цвета, высота, интервал обновления, время удержания speaking и дистанция отображения настраиваются.
 
 ### Адаптер Simple Voice Chat
 
@@ -246,9 +263,11 @@ config:
       bind-host: "0.0.0.0"
       port: 24454
       public:
-        host: ""
+        host: "0.0.0.0"
         port: 0
 ```
+
+`bind-host` задаёт локальный сокет. `public.host` отправляется клиенту Plasmo; значение `0.0.0.0` намеренно используется по умолчанию для direct Paper. В proxy mode укажите доступный адрес прокси и relay-порт в `public.port`.
 
 ## Команды
 

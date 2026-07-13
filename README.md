@@ -2,11 +2,11 @@
 
 [English](README.md) | [Русский](README.ru.md) | [Nederlands](README.nl.md) | [日本語](README.ja.md)
 
-VoiceCraft.Java is an ultimate voice chat plugin for Java Minecraft servers.
+VoiceCraft.Java is the ultimate voice chat interoperability plugin for Java Minecraft servers.
 
 It turns VoiceCraft into a server-wide voice layer where players using different voice clients can share the same proximity voice space. Simple Voice Chat users, Plasmo Voice users, and players connected through the VoiceCraft client can hear and talk to each other through one VoiceCraft backend.
 
-This is especially useful for cross-play servers: Bedrock players can join a Java server and use the VoiceCraft client for voice chat, while Java players can keep using familiar clients such as Simple Voice Chat or Plasmo Voice.
+This is especially useful for cross-play servers: Bedrock players can join through Geyser and use the standalone VoiceCraft client, while Java players can keep using Simple Voice Chat or Plasmo Voice. Players without either Java voice mod receive a small vanilla-compatible status overlay that is also visible through Geyser.
 
 ## The Idea
 
@@ -43,7 +43,8 @@ When enabled together on Paper, Simple Voice Chat and Plasmo Voice clients are c
 - Managed VoiceCraft Server 1.7 runtime on Paper: automatic download, startup, runtime option sync, and shutdown.
 - Server-side player positioning, dimension tracking, proximity distance, cave echo, and muffle updates.
 - Binding flow for external VoiceCraft clients with short in-game bind keys.
-- Localized config/message templates: `en`, `ru`, `nl`, `ja`.
+- Viewer-scoped vanilla voice statuses for unmodded Java and Bedrock players; modded clients keep their native UI without duplicate indicators.
+- Localized messages for `en`, `de`, `ru`, `nl`, `pl`, `ja`, `th`, `zh_CN`, and `zh_TW`; localized config templates for `en`, `ru`, `nl`, and `ja`.
 
 ## How It Works
 
@@ -77,6 +78,8 @@ VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio b
 ```
 
 The adapters speak the client protocols, manage UDP sessions, and pass Opus frames into the shared VoiceCraft audio bridge. Audio coming back from VoiceCraft is fanned out to the registered adapters, so players on different clients can participate in the same conversation.
+
+The shared compatibility contract covers proximity audio, identity, speaking lifecycle, and player voice state. Client-exclusive features such as private Simple Voice Chat groups remain native to their own ecosystem and are intentionally not cross-translated. Do not install the original Simple Voice Chat or Plasmo Voice server plugin on the same Paper instance when the corresponding VoiceCraft.Java adapter owns its ports.
 
 ## Runtime Modes
 
@@ -130,6 +133,8 @@ The project is currently built against:
 3. Start the server once to generate `config.yml`.
 4. Configure the VoiceCraft connection and the required adapters.
 5. Restart the server or run `/voice reload`.
+
+Both adapters are disabled by default. Enabling one makes VoiceCraft.Java the server endpoint for that client mod, so its UDP port must be reachable by players and must not already be occupied by the original voice-chat server plugin.
 
 Build outputs:
 
@@ -216,7 +221,19 @@ config:
     proximity-toggle: true
     voice-effects: true
     position-update-interval-ticks: 5
+
+    vanilla-status-overlay:
+      enabled: true
+      handshake-grace-ticks: 60
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
 ```
+
+The vanilla overlay uses invisible-by-default armor stands instead of display entities. A status is shown only when both the viewer and the target lack SVC/Plasmo, preventing it from overlapping either mod's native indicators. Symbols, colors, height, update interval, speaking hold time, and view distance are configurable.
 
 ### Simple Voice Chat Adapter
 
@@ -246,9 +263,11 @@ config:
       bind-host: "0.0.0.0"
       port: 24454
       public:
-        host: ""
+        host: "0.0.0.0"
         port: 0
 ```
+
+`bind-host` controls the local socket. `public.host` is sent to the Plasmo client; the default `0.0.0.0` is intentionally preserved for direct Paper compatibility. In proxy mode, replace it with the proxy's reachable address and set `public.port` to the relay port.
 
 ## Commands
 

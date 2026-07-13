@@ -2,11 +2,11 @@
 
 [English](README.md) | [Русский](README.ru.md) | [Nederlands](README.nl.md) | [日本語](README.ja.md)
 
-VoiceCraft.Java は Java Minecraft サーバー向けの究極のボイスチャットプラグインです。
+VoiceCraft.Java は Java Minecraft サーバー向けの究極のボイスチャット相互運用プラグインです。
 
 VoiceCraft をサーバー全体のボイスレイヤーとして使えるようにし、異なるボイスクライアントを使うプレイヤーが同じ proximity voice 空間を共有できます。Simple Voice Chat、Plasmo Voice、VoiceCraft client のプレイヤーが、1 つの backend を通して互いの声を聞き、会話できます。
 
-これは cross-play サーバーで特に便利です。Bedrock プレイヤーは Java サーバーに参加して VoiceCraft client でボイスチャットを使えます。一方で Java プレイヤーは Simple Voice Chat や Plasmo Voice のような慣れたクライアントを使い続けられます。
+これは cross-play サーバーで特に便利です。Bedrock プレイヤーは Geyser 経由で参加してスタンドアロン VoiceCraft client を利用でき、Java プレイヤーは Simple Voice Chat や Plasmo Voice を使い続けられます。これらの Java mod を持たないプレイヤーには、Geyser でも表示できる小さな vanilla 互換ステータスが表示されます。
 
 ## コンセプト
 
@@ -43,7 +43,8 @@ Paper 上で一緒に有効化すると、Simple Voice Chat と Plasmo Voice の
 - Paper 上の managed VoiceCraft Server 1.7 runtime: 自動ダウンロード、起動、runtime option の同期、停止。
 - サーバー側の player positioning、dimension tracking、proximity distance、cave echo、muffle updates。
 - 外部 VoiceCraft clients 向けの短い in-game bind keys による binding flow。
-- ローカライズ済み config/message templates: `en`, `ru`, `nl`, `ja`。
+- mod なしの Java/Bedrock プレイヤー向け viewer 単位の vanilla ステータス。SVC/Plasmo クライアントでは標準 UI のみが表示されます。
+- メッセージ翻訳: `en`, `de`, `ru`, `nl`, `pl`, `ja`, `th`, `zh_CN`, `zh_TW`。ローカライズ済み config template: `en`, `ru`, `nl`, `ja`。
 
 ## 仕組み
 
@@ -77,6 +78,8 @@ VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio b
 ```
 
 Adapters はクライアントプロトコルを扱い、UDP sessions を管理し、Opus frames を共有 VoiceCraft audio bridge に渡します。VoiceCraft から戻ってきた audio は登録済み adapters に配信されるため、異なるクライアントのプレイヤーが同じ会話に参加できます。
+
+共有 compatibility contract は proximity audio、identity、speaking lifecycle、player voice state を扱います。Simple Voice Chat の private group など client 固有の機能は各 ecosystem 内に残り、異なる client 間では意図的に変換されません。対応する VoiceCraft.Java adapter がポートを使用する場合、同じ Paper instance に元の SVC/Plasmo server plugin をインストールしないでください。
 
 ## 実行モード
 
@@ -130,6 +133,8 @@ Proxy mode でも Simple Voice Chat と Plasmo Voice の audio は UDP のまま
 3. 一度サーバーを起動して `config.yml` を生成します。
 4. VoiceCraft connection と必要な adapters を設定します。
 5. サーバーを再起動するか `/voice reload` を実行します。
+
+両 adapter はデフォルトで無効です。有効にすると VoiceCraft.Java がその client mod の server endpoint になるため、UDP port を外部から到達可能にし、元の voice-chat server plugin と重複させないでください。
 
 ビルド成果物:
 
@@ -216,7 +221,19 @@ config:
     proximity-toggle: true
     voice-effects: true
     position-update-interval-ticks: 5
+
+    vanilla-status-overlay:
+      enabled: true
+      handshake-grace-ticks: 60
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
 ```
+
+vanilla overlay は display entity ではなく、デフォルトで非表示の ArmorStand を使います。viewer と target の両方が SVC/Plasmo を使っていない場合だけ表示されます。symbol、color、高さ、更新間隔、speaking hold、表示距離を設定できます。
 
 ### Simple Voice Chat Adapter
 
@@ -246,9 +263,11 @@ config:
       bind-host: "0.0.0.0"
       port: 24454
       public:
-        host: ""
+        host: "0.0.0.0"
         port: 0
 ```
+
+`bind-host` はローカル socket、`public.host` は Plasmo client に送信する値です。direct Paper では `0.0.0.0` がデフォルトです。proxy mode では到達可能な proxy address と relay port を `public.port` に設定してください。
 
 ## コマンド
 

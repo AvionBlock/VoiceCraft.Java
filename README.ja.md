@@ -44,7 +44,6 @@ Paper 上で一緒に有効化すると、Simple Voice Chat と Plasmo Voice の
 - サーバー側の player positioning、dimension tracking、proximity distance、cave echo、muffle updates。
 - 外部 VoiceCraft clients 向けの短い in-game bind keys による binding flow。
 - ローカライズ済み config/message templates: `en`, `ru`, `nl`, `ja`。
-- Paper 上の optional PlaceholderAPI support。
 
 ## 仕組み
 

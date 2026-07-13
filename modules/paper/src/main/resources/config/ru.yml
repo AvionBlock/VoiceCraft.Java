@@ -1,4 +1,4 @@
-config-version: 4 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
+config-version: 5 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
 
 config:
   debug: false # Включить дополнительное логирование
@@ -46,21 +46,6 @@ config:
     proximity-toggle: true # Включить обработку proximity
     voice-effects: true # Включить эффекты пещеры и воды
 
-    not-in-voice-symbol: "\u2727" # Символ плейсхолдера, когда игрок не привязан
-    in-voice-symbol: "\u2726" # Символ плейсхолдера, когда игрок привязан
-
-    status-icons:
-      enabled: true # Показывать vanilla item-иконки над игроками без поддерживаемого voice-chat мода
-      update-interval-ticks: 5 # Как часто обновлять позицию/состояние иконки
-      speaking-hold-ms: 600 # Сколько держать состояние speaking после последнего аудиофрейма
-      height-offset: 2.45 # Высота иконки над ногами игрока
-      speaking-icon: "NOTE_BLOCK" # Иконка во время разговора
-      idle-icon: "SCULK_SENSOR" # Иконка, когда игрок привязан и молчит
-      no-voice-icon: "BARRIER" # Иконка, когда игрок не привязан к VoiceCraft
-      muted-icon: "GOAT_HORN" # Иконка, когда игрок замучен
-
-    send-bind-message: true           # Show a message when a player links to VoiceCraft
-    send-disconnect-message: true     # Show a message when a player leaves voice chat
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Интервал обновления позиций в тиках

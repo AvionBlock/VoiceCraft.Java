@@ -1,4 +1,4 @@
-﻿config-version: 2 # DO NOT EDIT: used for automatic config migrations
+﻿config-version: 3 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false # Включить дополнительное логирование
@@ -18,8 +18,6 @@ config:
     proximity-toggle: true # Включить обработку proximity
     voice-effects: true # Включить эффекты пещеры и воды
 
-    send-bind-message: true # Show a message when a player links to VoiceCraft
-    send-disconnect-message: true # Show a message when a player leaves voice chat
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Интервал обновления позиций в тиках

@@ -44,7 +44,6 @@ VoiceCraft - это аудиодвижок. VoiceCraft.Java - Minecraft-side п�
 - Server-side позиционирование игроков, отслеживание dimension, proximity distance, cave echo и muffle updates.
 - Binding flow для внешних VoiceCraft-клиентов с короткими in-game bind keys.
 - Локализованные config/message templates: `en`, `ru`, `nl`, `ja`.
-- Опциональная поддержка PlaceholderAPI на Paper.
 
 ## Как это работает
 

@@ -34,10 +34,6 @@ allprojects {
             url = uri("https://repo.papermc.io/repository/maven-public/")
         }
         maven {
-            name = "PlaceholderAPI"
-            url = uri("https://repo.extendedclip.com/releases/")
-        }
-        maven {
             name = "Bungeecord"
             url = uri("https://oss.sonatype.org/content/repositories/snapshots")
         }

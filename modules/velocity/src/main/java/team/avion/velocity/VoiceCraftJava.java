@@ -29,7 +29,6 @@ import com.velocitypowered.api.scheduler.ScheduledTask;
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
@@ -47,7 +46,11 @@ import team.avion.velocity.utils.VelocityLogger;
 @Plugin(id = "voicecraft-java", name = "VoiceCraft.Java", version = "0.0.0", description = "VoiceCraft bridge for Velocity", authors = { "0xAlpha" })
 public class VoiceCraftJava implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 2;
+    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final String[] REMOVED_PLAYER_NOTIFICATION_PATHS = {
+            "config.voice.send-bind-message",
+            "config.voice.send-disconnect-message"
+    };
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -251,10 +254,6 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
         playerBinds.put(player.getUsername(), true);
         messageHandler.sendPlayerBindSync(player);
         Logger.info(Language.getMessage(lang, "player-binded").replace("$player", player.getUsername()));
-        if (getConfig().getBoolean("config.voice.send-bind-message", true)) {
-            proxy.sendMessage(Component.text(player.getUsername()).decorate(TextDecoration.BOLD)
-                    .append(Component.text(Language.getMessage(lang, "player-binded").replace("$player", "")).color(NamedTextColor.DARK_GREEN)));
-        }
         return true;
     }
 
@@ -439,6 +438,9 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
             String template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
                     .replace("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString());
             getConfig().mergeMissingFrom(template);
+            for (String removedPath : REMOVED_PLAYER_NOTIFICATION_PATHS) {
+                getConfig().set(removedPath, null);
+            }
             getConfig().set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             saveConfig();
             Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",

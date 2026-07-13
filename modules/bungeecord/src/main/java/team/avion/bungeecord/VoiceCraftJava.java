@@ -36,7 +36,11 @@ import team.avion.proxy.VoiceProxyUdpRelayManager;
 
 public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 2;
+    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final String[] REMOVED_PLAYER_NOTIFICATION_PATHS = {
+            "config.voice.send-bind-message",
+            "config.voice.send-disconnect-message"
+    };
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -223,11 +227,6 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
         playerBinds.put(player.getName(), true);
         messageHandler.sendPlayerBindSync(player);
         Logger.info(Language.getMessage(lang, "player-binded").replace("$player", player.getName()));
-        if (getConfig().getBoolean("config.voice.send-bind-message", true)) {
-            getProxy().broadcast(new ComponentBuilder(player.getName()).bold(true)
-                    .append(new ComponentBuilder(Language.getMessage(lang, "player-binded").replace("$player", "")).color(ChatColor.DARK_GREEN).create())
-                    .create());
-        }
         return true;
     }
 
@@ -429,6 +428,9 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
             Configuration defaultConfig = ConfigurationProvider.getProvider(YamlConfiguration.class)
                     .load(new StringReader(template));
             mergeMissingConfig(config, defaultConfig, "");
+            for (String removedPath : REMOVED_PLAYER_NOTIFICATION_PATHS) {
+                config.set(removedPath, null);
+            }
             config.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             saveConfig();
             Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",

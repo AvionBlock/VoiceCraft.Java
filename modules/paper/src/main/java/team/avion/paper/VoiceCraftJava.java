@@ -3,7 +3,6 @@ package team.avion.paper;
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -22,7 +21,6 @@ import team.avion.paper.commands.VoiceCommand;
 import team.avion.paper.listeners.*;
 import team.avion.paper.tasks.PositionsTask;
 import team.avion.paper.utils.*;
-import team.avion.paper.voicecraft.PlayerVoiceStatusOverlay;
 import team.avion.paper.voicecraft.PaperVoiceCraftSessionManager;
 import team.avion.paper.voicecraft.VoiceCraftProcessManager;
 import team.avion.proxy.ProxyMessageCodec;
@@ -39,7 +37,14 @@ import java.util.Map;
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 4;
+    private static final int CURRENT_CONFIG_VERSION = 5;
+    private static final String[] REMOVED_VOICE_UI_PATHS = {
+            "config.voice.status-icons",
+            "config.voice.not-in-voice-symbol",
+            "config.voice.in-voice-symbol",
+            "config.voice.send-bind-message",
+            "config.voice.send-disconnect-message"
+    };
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -65,7 +70,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private @Getter VoiceCraftProcessManager voiceCraftProcessManager;
     private @Getter PaperVoiceCraftSessionManager sessionManager;
     private @Getter PositionsTask positionsTask;
-    private PlayerVoiceStatusOverlay voiceStatusOverlay;
     private PaperPlasmoVoiceAdapter plasmoVoiceAdapter;
     private PaperSimpleVoiceChatAdapter simpleVoiceChatAdapter;
 
@@ -88,7 +92,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         reloadConfig();
         voiceCraftProcessManager = new VoiceCraftProcessManager(this);
         sessionManager = new PaperVoiceCraftSessionManager(this);
-        voiceStatusOverlay = new PlayerVoiceStatusOverlay(this);
         plasmoVoiceAdapter = new PaperPlasmoVoiceAdapter(this);
         simpleVoiceChatAdapter = new PaperSimpleVoiceChatAdapter(this);
 
@@ -104,16 +107,12 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         positionsTask = new PositionsTask(this, lang);
         taskRunner = positionsTask.runTaskTimer(this, 1, positionTaskInterval);
         getServer().getPluginManager().registerEvents(new PlayerQuitHandler(this, lang), this);
-        voiceStatusOverlay.start();
 
         this.reload();
     }
 
     @Override
     public void onDisable() {
-        if (voiceStatusOverlay != null) {
-            voiceStatusOverlay.stop();
-        }
         stopPlasmoAdapter();
         stopSimpleVoiceChatAdapter();
         disconnect("Plugin disabled");
@@ -178,9 +177,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             taskRunner.cancel();
         positionsTask = new PositionsTask(this, lang);
         taskRunner = positionsTask.runTaskTimer(this, 1, positionTaskInterval);
-        if (voiceStatusOverlay != null) {
-            voiceStatusOverlay.reload();
-        }
 
         reloadPlasmoAdapter();
         reloadSimpleVoiceChatAdapter();
@@ -311,15 +307,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         }
 
         Logger.info(Language.getMessage(lang, "player-binded").replace("$player", player.getName()));
-
-        boolean sendBindedMessage = getConfig().getBoolean("config.voice.send-bind-message");
-        if (sendBindedMessage) {
-            Bukkit.broadcast(
-                    Component.text(player.getName()).decorate(TextDecoration.BOLD)
-                            .append(Component.text(
-                                    Language.getMessage(lang, "player-binded").replace("$player", ""))
-                                    .color(NamedTextColor.DARK_GREEN)));
-        }
         return true;
     }
 
@@ -376,12 +363,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
     public Boolean disconnectPlayer(Player player) {
         return disconnectPlayer(player, 0);
-    }
-
-    public void setVoiceStatusMuted(UUID playerId, boolean muted) {
-        if (voiceStatusOverlay != null) {
-            voiceStatusOverlay.setMuted(playerId, muted);
-        }
     }
 
     /**
@@ -478,6 +459,9 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
                 }
             }
 
+            for (String removedPath : REMOVED_VOICE_UI_PATHS) {
+                userConfig.set(removedPath, null);
+            }
             userConfig.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             userConfig.save(configFile);
             Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",

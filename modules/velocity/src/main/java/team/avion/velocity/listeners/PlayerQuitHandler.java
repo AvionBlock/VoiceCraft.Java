@@ -4,8 +4,6 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.proxy.Player;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import team.avion.velocity.VoiceCraftJava;
 import team.avion.common.localization.Language;
 
@@ -35,9 +33,6 @@ public class PlayerQuitHandler {
 
         if (isDisconnected) {
             plugin.Logger.info(disconnectMessage);
-            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-disconnect-message", true)) {
-                plugin.getProxy().sendMessage(Component.text(disconnectMessage).color(NamedTextColor.YELLOW));
-            }
         } else {
             plugin.Logger.error(Language.getMessage(lang, "player-disconnect-failed").replace("$player", player.getUsername()));
             plugin.getPlayerBinds().remove(player.getUsername());

@@ -44,7 +44,6 @@ Wanneer ze samen op Paper zijn ingeschakeld, worden Simple Voice Chat- en Plasmo
 - Server-side player positioning, dimension tracking, proximity distance, cave echo en muffle-updates.
 - Binding flow voor externe VoiceCraft clients met korte in-game bind keys.
 - Gelokaliseerde config/message templates: `en`, `ru`, `nl`, `ja`.
-- Optionele PlaceholderAPI support op Paper.
 
 ## Hoe Het Werkt
 

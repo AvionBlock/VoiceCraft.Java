@@ -1,14 +1,11 @@
 package team.avion.paper.listeners;
 
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import team.avion.paper.VoiceCraftJava;
 import team.avion.common.localization.Language;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 
 public class PlayerQuitHandler implements Listener {
 
@@ -43,11 +40,6 @@ public class PlayerQuitHandler implements Listener {
 
         if (isDisconnected) {
             plugin.Logger.info(disconnectMessage);
-
-            boolean sendDisconnectMessage = plugin.getConfig().getBoolean("config.voice.send-disconnect-message");
-            if (sendDisconnectMessage) {
-                Bukkit.broadcast(Component.text(disconnectMessage).color(NamedTextColor.YELLOW));
-            }
         } else {
             plugin.Logger.error(Language.getMessage(lang, "player-disconnect-failed").replace("$player", playerName));
             plugin.getPlayerBinds().remove(playerName);

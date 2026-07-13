@@ -50,5 +50,4 @@ tasks.named('sourcesJar') {
 
 dependencies {
     compileOnly 'net.kyori:adventure-api:4.25.0'
-    compileOnly 'me.clip:placeholderapi:2.12.2'
 }

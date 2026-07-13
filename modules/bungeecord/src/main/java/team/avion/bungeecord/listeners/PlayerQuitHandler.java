@@ -1,7 +1,5 @@
 package team.avion.bungeecord.listeners;
 
-import net.md_5.bungee.api.ChatColor;
-import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.plugin.Listener;
@@ -35,9 +33,6 @@ public class PlayerQuitHandler implements Listener {
 
         if (isDisconnected) {
             plugin.Logger.info(disconnectMessage);
-            if (VoiceCraftJava.getConfig().getBoolean("config.voice.send-disconnect-message", true)) {
-                plugin.getProxy().broadcast(new ComponentBuilder(disconnectMessage).color(ChatColor.YELLOW).create());
-            }
         } else {
             plugin.Logger.error(Language.getMessage(lang, "player-disconnect-failed").replace("$player", player.getName()));
             plugin.getPlayerBinds().remove(player.getName());

@@ -1,4 +1,4 @@
-config-version: 4 # DO NOT EDIT: used for automatic config migrations
+config-version: 5 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false
@@ -46,21 +46,6 @@ config:
     proximity-toggle: true
     voice-effects: true
 
-    not-in-voice-symbol: "\u2727"
-    in-voice-symbol: "\u2726"
-
-    status-icons:
-      enabled: true
-      update-interval-ticks: 5
-      speaking-hold-ms: 600
-      height-offset: 2.45
-      speaking-icon: "NOTE_BLOCK"
-      idle-icon: "SCULK_SENSOR"
-      no-voice-icon: "BARRIER"
-      muted-icon: "GOAT_HORN"
-
-    send-bind-message: true # Show a message when a player links to VoiceCraft
-    send-disconnect-message: true # Show a message when a player leaves voice chat
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5

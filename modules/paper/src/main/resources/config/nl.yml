@@ -1,4 +1,4 @@
-config-version: 4 # NIET AANPASSEN: gebruikt voor automatische configmigraties
+config-version: 5 # NIET AANPASSEN: gebruikt voor automatische configmigraties
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -46,21 +46,6 @@ config:
     proximity-toggle: true # Proximity-verwerking inschakelen
     voice-effects: true # Grot- en watereffecten inschakelen
 
-    not-in-voice-symbol: "\u2727" # Placeholder-symbool als een speler niet gekoppeld is
-    in-voice-symbol: "\u2726" # Placeholder-symbool als een speler gekoppeld is
-
-    status-icons:
-      enabled: true # Vanilla item-iconen tonen boven spelers zonder ondersteunde voice-chatmod
-      update-interval-ticks: 5 # Hoe vaak de icoonpositie/status wordt bijgewerkt
-      speaking-hold-ms: 600 # Hoe lang speaking actief blijft na het laatste audioframe
-      height-offset: 2.45 # Icoonhoogte boven de voeten van de speler
-      speaking-icon: "NOTE_BLOCK" # Icoon tijdens spreken
-      idle-icon: "SCULK_SENSOR" # Icoon wanneer gekoppeld en stil
-      no-voice-icon: "BARRIER" # Icoon wanneer de speler niet aan VoiceCraft gekoppeld is
-      muted-icon: "GOAT_HORN" # Icoon wanneer de speler gemute is
-
-    send-bind-message: true # Show a message when a player links to VoiceCraft
-    send-disconnect-message: true # Show a message when a player leaves voice chat
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Positie-update-interval in ticks

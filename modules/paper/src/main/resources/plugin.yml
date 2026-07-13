@@ -11,9 +11,6 @@ website: https://java.voicecraft.chat
 api-version: "1.21.11"
 prefix: VoiceCraft.Java
 
-softdepend:
-  - PlaceholderAPI
-
 commands:
   voice:
     description: Voice chat main command.

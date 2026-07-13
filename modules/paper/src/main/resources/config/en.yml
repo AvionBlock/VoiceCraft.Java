@@ -1,4 +1,4 @@
-config-version: 4 # DO NOT EDIT: used for automatic config migrations
+config-version: 5 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false                   # Enable additional debug logging
@@ -46,21 +46,6 @@ config:
     proximity-toggle: true       # Enable proximity processing
     voice-effects: true          # Enable cave/water voice effects
 
-    not-in-voice-symbol: "\u2727" # Placeholder symbol when a player is not linked
-    in-voice-symbol: "\u2726"     # Placeholder symbol when a player is linked
-
-    status-icons:
-      enabled: true               # Show vanilla item icons above players without a supported voice-chat mod
-      update-interval-ticks: 5    # How often the icon position/state is refreshed
-      speaking-hold-ms: 600       # How long a player stays in speaking state after the last audio frame
-      height-offset: 2.45         # Icon height above player feet
-      speaking-icon: "NOTE_BLOCK" # Icon shown while speaking
-      idle-icon: "SCULK_SENSOR"   # Icon shown while linked and idle
-      no-voice-icon: "BARRIER"    # Icon shown when the player is not linked to VoiceCraft
-      muted-icon: "GOAT_HORN"     # Icon shown when the player is muted
-
-    send-bind-message: true           # Show a message when a player links to VoiceCraft
-    send-disconnect-message: true     # Show a message when a player leaves voice chat
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Position update interval in ticks

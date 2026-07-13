@@ -44,7 +44,6 @@ When enabled together on Paper, Simple Voice Chat and Plasmo Voice clients are c
 - Server-side player positioning, dimension tracking, proximity distance, cave echo, and muffle updates.
 - Binding flow for external VoiceCraft clients with short in-game bind keys.
 - Localized config/message templates: `en`, `ru`, `nl`, `ja`.
-- Optional PlaceholderAPI support on Paper.
 
 ## How It Works
 

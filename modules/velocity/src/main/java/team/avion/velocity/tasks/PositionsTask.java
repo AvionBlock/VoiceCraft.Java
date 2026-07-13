@@ -3,7 +3,7 @@ package team.avion.velocity.tasks;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import team.avion.velocity.VoiceCraftJava;
-import team.avion.velocity.utils.Language;
+import team.avion.common.localization.Language;
 
 public class PositionsTask {
     private final VoiceCraftJava plugin;

@@ -14,6 +14,7 @@ import org.bukkit.scheduler.BukkitTask;
 import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
+import team.avion.common.localization.Language;
 import team.avion.adapter.AdapterContext;
 import team.avion.paper.adapters.plasmo.PaperPlasmoVoiceAdapter;
 import team.avion.paper.adapters.simplevoicechat.PaperSimpleVoiceChatAdapter;
@@ -55,6 +56,10 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private @Getter Map<String, Boolean> playerBinds = new java.util.concurrent.ConcurrentHashMap<>();
     private @Getter volatile String token = "";
     private String lang;
+
+    public String getLanguage() {
+        return lang;
+    }
     public volatile boolean usesProxy = false;
     private final @Getter PluginMessageHandler messageHandler = new PluginMessageHandler(this);
     private @Getter VoiceCraftProcessManager voiceCraftProcessManager;
@@ -89,7 +94,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
         lang = resolveConfiguredLanguage();
         int positionTaskInterval = getConfig().getInt("config.voice.position-update-interval-ticks", 1);
-        Language.init(this);
 
         getServer().getMessenger().registerOutgoingPluginChannel(this, ProxyMessageCodec.CHANNEL_NAME);
         getServer().getMessenger().registerIncomingPluginChannel(this, ProxyMessageCodec.CHANNEL_NAME, messageHandler);
@@ -298,7 +302,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         }
         boolean bound = sessionManager.bindPlayer(playerKey, player);
         if (!bound && tries == 0 && !sessionManager.isConnected()) {
-            Logger.info("VoiceCraft session dropped during bind, reconnecting...");
+            Logger.infoLocalized("session.bind-reconnect");
             isConnected = reconnect(true);
             return bind(playerKey, player, 1);
         }
@@ -336,7 +340,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
         boolean bound = sessionManager.bindFakePlayer(playerKey, name);
         if (!bound && tries == 0 && !sessionManager.isConnected()) {
-            Logger.info("VoiceCraft session dropped during fake bind, reconnecting...");
+            Logger.infoLocalized("session.fake-bind-reconnect");
             isConnected = reconnect(true);
             return bindFake(playerKey, name, 1);
         }
@@ -363,7 +367,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
         boolean disconnected = sessionManager.unbindPlayer(player);
         if (!disconnected && tries == 0 && !sessionManager.isConnected()) {
-            Logger.info("VoiceCraft session dropped during unbind, reconnecting...");
+            Logger.infoLocalized("session.unbind-reconnect");
             isConnected = reconnect(true);
             return disconnectPlayer(player, 1);
         }
@@ -437,16 +441,16 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             ConfigTemplateWriter.write(input, configFile.toPath(),
                     Map.of("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString()));
         } catch (IOException exception) {
-            Logger.error("Could not create localized config.yml: " + exception.getMessage());
+            Logger.errorLocalized("config.localized-create-failed", "$error", exception.getMessage());
         }
     }
 
     private boolean migrateConfigIfNeeded() {
         int configVersion = getConfig().getInt(CONFIG_VERSION_PATH, 0);
         if (configVersion > CURRENT_CONFIG_VERSION) {
-            Logger.error("Config version " + configVersion + " is newer than supported version "
-                    + CURRENT_CONFIG_VERSION + ".");
-            Logger.error("VoiceCraft.Java will not start. Move config.yml away and let the plugin generate a new config.");
+            Logger.errorLocalized("config.version-too-new", "$version", Integer.toString(configVersion),
+                    "$supported", Integer.toString(CURRENT_CONFIG_VERSION));
+            Logger.errorLocalized("config.start-aborted");
             return false;
         }
         if (configVersion == CURRENT_CONFIG_VERSION) {
@@ -476,10 +480,11 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
             userConfig.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             userConfig.save(configFile);
-            Logger.info("Updated config.yml from version " + configVersion + " to " + CURRENT_CONFIG_VERSION + ".");
+            Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",
+                    Integer.toString(CURRENT_CONFIG_VERSION));
             return true;
         } catch (Exception exception) {
-            Logger.error("Could not migrate config.yml: " + exception.getMessage());
+            Logger.errorLocalized("config.migrate-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -517,7 +522,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         try {
             plasmoVoiceAdapter.start(new AdapterContext(Logger, getDataFolder().toPath(), sessionManager));
         } catch (Exception exception) {
-            Logger.error("Failed to start Plasmo Voice adapter: " + exception.getMessage());
+            Logger.errorLocalized("adapter.plasmo-start-failed", "$error", exception.getMessage());
         }
     }
 
@@ -528,7 +533,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         try {
             plasmoVoiceAdapter.stop();
         } catch (Exception exception) {
-            Logger.warn("Failed to stop Plasmo Voice adapter: " + exception.getMessage());
+            Logger.warnLocalized("adapter.plasmo-stop-failed", "$error", exception.getMessage());
         }
     }
 
@@ -541,7 +546,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         try {
             simpleVoiceChatAdapter.start(new AdapterContext(Logger, getDataFolder().toPath(), sessionManager));
         } catch (Exception exception) {
-            Logger.error("Failed to start Simple Voice Chat adapter: " + exception.getMessage());
+            Logger.errorLocalized("adapter.svc-start-failed", "$error", exception.getMessage());
         }
     }
 
@@ -552,7 +557,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         try {
             simpleVoiceChatAdapter.stop();
         } catch (Exception exception) {
-            Logger.warn("Failed to stop Simple Voice Chat adapter: " + exception.getMessage());
+            Logger.warnLocalized("adapter.svc-stop-failed", "$error", exception.getMessage());
         }
     }
 }

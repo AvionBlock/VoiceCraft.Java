@@ -104,13 +104,12 @@ public class VoiceCraftProcessManager {
             if (process != null && process.isAlive()) {
                 ensureLogPumps(process);
                 if (initialSync.changed()) {
-                    restartManagedProcess(launchTarget, "Managed VoiceCraft config changed, restarting process...");
+                    restartManagedProcess(launchTarget, "runtime.config-changed-restart");
                 }
                 return;
             }
             if (isEndpointReachable()) {
-                plugin.Logger.warn("VoiceCraft endpoint is already reachable, but it was not started by this plugin. "
-                        + "Executable stdout/stderr cannot be attached for external processes.");
+                plugin.Logger.warnLocalized("runtime.external-process");
                 return;
             }
 
@@ -120,16 +119,17 @@ public class VoiceCraftProcessManager {
                 ManagedConfigSyncResult postStartSync = syncManagedServerProperties(launchTarget.installDirectory());
                 if (postStartSync.changed()) {
                     restartManagedProcess(launchTarget,
-                            "Managed VoiceCraft config was generated and updated, restarting process...");
+                            "runtime.config-generated-restart");
                 }
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            plugin.Logger.error("VoiceCraft startup was interrupted: " + ex.getMessage());
+            plugin.Logger.errorLocalized("runtime.start-interrupted", "$error", ex.getMessage());
             process = null;
         } catch (IOException ex) {
-            plugin.Logger.error("Failed to start VoiceCraft process: " + ex.getMessage());
-            plugin.Logger.error("VoiceCraft executable path: " + (launchTarget == null ? "<unresolved>" : launchTarget.command()));
+            plugin.Logger.errorLocalized("runtime.start-failed", "$error", ex.getMessage());
+            plugin.Logger.errorLocalized("runtime.executable-path", "$path",
+                    launchTarget == null ? "<unresolved>" : launchTarget.command());
             process = null;
         }
     }
@@ -148,7 +148,7 @@ public class VoiceCraftProcessManager {
             }
 
             if (plugin.getConfig().getBoolean("config.voicecraft.shutdown-on-disable", true)) {
-                plugin.Logger.info("Stopping managed VoiceCraft process...");
+                plugin.Logger.infoLocalized("runtime.stopping");
                 stopProcess();
             }
 
@@ -167,8 +167,7 @@ public class VoiceCraftProcessManager {
                     try {
                         plugin.reconnect(true);
                     } catch (Exception exception) {
-                        plugin.Logger.warn("VoiceCraft reconnect after managed startup failed: "
-                                + exception.getMessage());
+                        plugin.Logger.warnLocalized("runtime.reconnect-failed", "$error", exception.getMessage());
                     }
                 }
             });
@@ -187,14 +186,14 @@ public class VoiceCraftProcessManager {
         builder.directory(launchTarget.workingDirectory().toFile());
         configureRuntimeEnvironment(builder);
 
-        plugin.Logger.info("Starting managed VoiceCraft process: " + launchTarget.command());
+        plugin.Logger.infoLocalized("runtime.starting", "$path", launchTarget.command());
         process = builder.start();
         startLogPumps(process);
         waitUntilReachable();
     }
 
     private void restartManagedProcess(LaunchTarget launchTarget, String reason) throws IOException {
-        plugin.Logger.info(reason);
+        plugin.Logger.infoLocalized(reason);
         stopProcess();
         process = null;
         startManagedProcess(launchTarget);
@@ -221,7 +220,7 @@ public class VoiceCraftProcessManager {
     private void startLogPumps(Process managedProcess) {
         stdoutLogPump = startLogPump(managedProcess.getInputStream(), false);
         stderrLogPump = startLogPump(managedProcess.getErrorStream(), true);
-        plugin.Logger.info("Forwarding managed VoiceCraft process stdout/stderr to the server log.");
+        plugin.Logger.infoLocalized("runtime.forwarding-output");
     }
 
     private void ensureLogPumps(Process managedProcess) {
@@ -248,7 +247,7 @@ public class VoiceCraftProcessManager {
                     }
                 }
             } catch (IOException exception) {
-                plugin.Logger.debug("Managed VoiceCraft log pump stopped: " + exception.getMessage());
+                plugin.Logger.debugLocalized("runtime.log-pump-stopped", "$error", exception.getMessage());
             }
         }, errorStream ? "voicecraft-stderr" : "voicecraft-stdout");
         thread.setDaemon(true);
@@ -282,13 +281,13 @@ public class VoiceCraftProcessManager {
         Instant deadline = Instant.now().plus(Duration.ofMillis(timeoutMs));
         while (Instant.now().isBefore(deadline)) {
             if (process == null || !process.isAlive()) {
-                plugin.Logger.error("Managed VoiceCraft process exited before it became reachable.");
+                plugin.Logger.errorLocalized("runtime.exited-before-ready");
                 process = null;
                 return;
             }
 
             if (isEndpointReachable()) {
-                plugin.Logger.info("Managed VoiceCraft process is reachable.");
+                plugin.Logger.infoLocalized("runtime.reachable");
                 return;
             }
 
@@ -300,7 +299,7 @@ public class VoiceCraftProcessManager {
             }
         }
 
-        plugin.Logger.warn("VoiceCraft process started, but the transport endpoint is not reachable yet.");
+        plugin.Logger.warnLocalized("runtime.endpoint-not-ready");
     }
 
     private boolean isEndpointReachable() {
@@ -308,7 +307,7 @@ public class VoiceCraftProcessManager {
             socket.connect(new InetSocketAddress(plugin.getHost(), plugin.getPort()), 500);
             return true;
         } catch (IOException exception) {
-            plugin.Logger.debug("VoiceCraft endpoint is not reachable yet: " + exception.getMessage());
+            plugin.Logger.debugLocalized("runtime.endpoint-check-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -328,8 +327,7 @@ public class VoiceCraftProcessManager {
             if (!Files.exists(executablePath)) {
                 throw exception;
             }
-            plugin.Logger.warn("Could not check the configured VoiceCraft release; using the installed runtime: "
-                    + exception.getMessage());
+            plugin.Logger.warnLocalized("runtime.release-check-failed", "$error", exception.getMessage());
             Path absoluteExecutablePath = executablePath.toAbsolutePath().normalize();
             return new LaunchTarget(installDirectory, absoluteExecutablePath.getParent(),
                     absoluteExecutablePath.toString(), List.of());
@@ -338,15 +336,14 @@ public class VoiceCraftProcessManager {
                 + "|" + releaseAsset.tagName() + "|" + VoiceCraftProtocol.VERSION_STRING + "|" + releaseAsset.name();
 
         if (!Files.exists(executablePath) || !releaseId.equals(readReleaseMarker(releaseMarker))) {
-            plugin.Logger.info("Preparing VoiceCraft runtime " + releaseAsset.tagName()
-                    + " for McApi protocol " + VoiceCraftProtocol.VERSION_STRING
-                    + " (" + platform + "/" + architecture + ").");
+            plugin.Logger.infoLocalized("runtime.preparing", "$release", releaseAsset.tagName(), "$protocol",
+                    VoiceCraftProtocol.VERSION_STRING, "$platform", platform, "$architecture", architecture);
             downloadAndExtractRelease(installDirectory, releaseAsset);
             writeReleaseMarker(releaseMarker, releaseId);
         }
 
         if (!Files.exists(executablePath)) {
-            plugin.Logger.error("Managed VoiceCraft executable was not found after extraction: " + executablePath);
+            plugin.Logger.errorLocalized("runtime.executable-not-found", "$path", executablePath.toString());
             return null;
         }
 
@@ -404,7 +401,7 @@ public class VoiceCraftProcessManager {
     private ManagedConfigSyncResult syncManagedServerProperties(Path installDirectory) throws IOException {
         Path serverPropertiesPath = installDirectory.resolve("config").resolve("ServerProperties.json").normalize();
         if (!Files.exists(serverPropertiesPath)) {
-            plugin.Logger.info("Managed VoiceCraft config file is not present yet: " + serverPropertiesPath);
+            plugin.Logger.infoLocalized("runtime.config-not-present", "$path", serverPropertiesPath.toString());
             return new ManagedConfigSyncResult(serverPropertiesPath, false, true);
         }
 
@@ -495,7 +492,7 @@ public class VoiceCraftProcessManager {
             throws IOException, InterruptedException {
         String downloadUrl = releaseAsset.url();
 
-        plugin.Logger.info("Downloading VoiceCraft release asset " + releaseAsset.name() + "...");
+        plugin.Logger.infoLocalized("runtime.downloading", "$asset", releaseAsset.name());
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(downloadUrl))
                 .timeout(Duration.ofSeconds(30))

@@ -44,7 +44,7 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
             return;
         }
         if (bindPort <= 0) {
-            logger.warn("Skipping " + adapterId + " UDP relay: invalid bind port " + bindPort + ".");
+            logger.warnLocalized("proxy.invalid-bind-port", "$adapter", adapterId, "$port", Integer.toString(bindPort));
             return;
         }
 
@@ -58,10 +58,11 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
         try {
             relay.start();
             relaysByAdapter.put(adapterId, relay);
-            logger.info("Started " + adapterId + " UDP relay on " + relay.bindHost + ":" + relay.bindPort + ".");
+            logger.infoLocalized("proxy.relay-started", "$adapter", adapterId, "$host", relay.bindHost,
+                    "$port", Integer.toString(relay.bindPort));
         } catch (IOException exception) {
             relay.close();
-            logger.warn("Failed to start " + adapterId + " UDP relay: " + exception.getMessage());
+            logger.warnLocalized("proxy.relay-start-failed", "$adapter", adapterId, "$error", exception.getMessage());
         }
     }
 
@@ -71,13 +72,13 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
         }
         if (routeKey == null || routeKey.isBlank() || backendHost == null || backendHost.isBlank()
                 || backendPort <= 0) {
-            logger.warn("Ignoring invalid " + adapterId + " UDP route.");
+            logger.warnLocalized("proxy.invalid-route", "$adapter", adapterId);
             return;
         }
 
         routes.put(new RouteKey(adapterId, routeKey), new BackendRoute(backendHost, backendPort));
-        logger.debug("Registered " + adapterId + " UDP route " + routeKey + " -> " + backendHost + ":"
-                + backendPort + ".");
+        logger.debugLocalized("proxy.route-registered", "$adapter", adapterId, "$route", routeKey.toString(),
+                "$host", backendHost, "$port", Integer.toString(backendPort));
     }
 
     public void unregisterRoute(String adapterId, String routeKey) {
@@ -174,10 +175,10 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
                     // Timeout keeps close() responsive.
                 } catch (SocketException exception) {
                     if (running.get()) {
-                        logger.warn(adapterId + " UDP relay socket failed: " + exception.getMessage());
+                        logger.warnLocalized("proxy.relay-socket-failed", "$adapter", adapterId, "$error", exception.getMessage());
                     }
                 } catch (Exception exception) {
-                    logger.debug("Ignored invalid " + adapterId + " UDP relay packet: " + exception.getMessage());
+                    logger.debugLocalized("proxy.invalid-packet", "$adapter", adapterId, "$error", exception.getMessage());
                 }
             }
         }
@@ -192,7 +193,7 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
 
             BackendRoute route = resolveRoute(adapterId, routeKey.get());
             if (route == null) {
-                logger.debug("No " + adapterId + " UDP route for key " + routeKey.get() + ".");
+                logger.debugLocalized("proxy.route-not-found", "$adapter", adapterId, "$route", routeKey.get().toString());
                 return;
             }
 
@@ -206,7 +207,7 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
                 try {
                     return new RelayConnection(key, route);
                 } catch (SocketException exception) {
-                    logger.warn("Failed to open " + adapterId + " backend UDP socket: " + exception.getMessage());
+                    logger.warnLocalized("proxy.backend-socket-open-failed", "$adapter", adapterId, "$error", exception.getMessage());
                     return null;
                 }
             });
@@ -287,12 +288,12 @@ public final class VoiceProxyUdpRelayManager implements Closeable {
                         // Timeout keeps close() responsive.
                     } catch (SocketException exception) {
                         if (open.get() && running.get()) {
-                            logger.warn(adapterId + " backend UDP relay failed for " + routeKey + ": "
-                                    + exception.getMessage());
+                            logger.warnLocalized("proxy.backend-relay-failed", "$adapter", adapterId, "$route", routeKey.toString(),
+                                    "$error", exception.getMessage());
                         }
                     } catch (IOException exception) {
-                        logger.debug("Failed to relay " + adapterId + " backend UDP packet for " + routeKey + ": "
-                                + exception.getMessage());
+                        logger.debugLocalized("proxy.backend-packet-failed", "$adapter", adapterId, "$route", routeKey.toString(),
+                                "$error", exception.getMessage());
                     }
                 }
             }

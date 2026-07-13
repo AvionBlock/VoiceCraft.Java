@@ -7,7 +7,7 @@ import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.plugin.Command;
 import net.md_5.bungee.api.plugin.TabExecutor;
 import team.avion.bungeecord.VoiceCraftJava;
-import team.avion.bungeecord.utils.Language;
+import team.avion.common.localization.Language;
 import team.avion.common.commands.BaseVoiceCommand;
 import team.avion.common.utils.DoubleStringOperation;
 import team.avion.common.utils.IntegerOperation;

@@ -10,6 +10,12 @@ import team.avion.velocity.VoiceCraftJava;
 
 public class VelocityLogger extends BaseLogger {
     @Override
+    protected String language() {
+        VoiceCraftJava plugin = VoiceCraftJava.getInstance();
+        return plugin == null ? null : plugin.getLanguage();
+    }
+
+    @Override
     public void log(Component msg) {
         console().sendMessage(prefix().append(msg));
     }

@@ -13,7 +13,7 @@ import team.avion.common.utils.DoubleStringOperation;
 import team.avion.common.utils.IntegerOperation;
 import team.avion.common.utils.StringOperation;
 import team.avion.velocity.VoiceCraftJava;
-import team.avion.velocity.utils.Language;
+import team.avion.common.localization.Language;
 
 public final class VoiceCommand implements SimpleCommand {
     private final BaseVoiceCommand voiceCommand;

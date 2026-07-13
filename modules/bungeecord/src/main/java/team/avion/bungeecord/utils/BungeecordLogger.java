@@ -8,6 +8,12 @@ import team.avion.common.utils.BaseLogger;
 
 public class BungeecordLogger extends BaseLogger {
     @Override
+    protected String language() {
+        VoiceCraftJava plugin = VoiceCraftJava.getInstance();
+        return plugin == null ? null : plugin.getLanguage();
+    }
+
+    @Override
     public void info(String msg) {
         console().sendMessage(prefix().append(msg).color(ChatColor.WHITE).bold(true).create());
     }

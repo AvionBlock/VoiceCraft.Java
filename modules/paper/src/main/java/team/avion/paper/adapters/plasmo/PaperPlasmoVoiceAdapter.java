@@ -150,9 +150,9 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         context.audioBridge().registerAudioSink(this);
         context.audioBridge().registerIdentityListener(this);
         state = AdapterState.RUNNING;
-        plugin.Logger.info("Plasmo Voice adapter listening on " + bindHost + ":" + udpPort
-                + " and advertising " + (publicHost.isBlank() ? "<minecraft host>" : publicHost)
-                + ":" + publicPort + ".");
+        plugin.Logger.infoLocalized("adapter.listening", "$adapter", "Plasmo Voice", "$bindHost", bindHost,
+                "$bindPort", Integer.toString(udpPort), "$publicHost",
+                publicHost.isBlank() ? "<minecraft host>" : publicHost, "$publicPort", Integer.toString(publicPort));
     }
 
     @Override
@@ -226,8 +226,8 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 sendUdpPacket(packet, receiver.udpSecret(), receiver.remoteAddress());
                 debugForwardedAudio(opusFrame.length);
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to forward Plasmo audio to " + receiver.playerName()
-                        + ": " + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.audio-forward-failed", "$adapter", "Plasmo", "$player",
+                        receiver.playerName(), "$error", exception.getMessage());
             }
         }
     }
@@ -302,12 +302,13 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             } else if (packet instanceof PlayerActivationDistancesPacket) {
                 // Client-side distance preferences are accepted but currently mapped to VoiceCraft proximity settings.
             } else if (packet instanceof PlayerAudioEndPacket audioEndPacket) {
-                debug("Plasmo client " + player.getName() + " ended audio sequence="
-                        + audioEndPacket.sequenceNumber() + ".");
+                debugLocalized("adapter-debug.audio-ended", "$adapter", "Plasmo", "$player", player.getName(),
+                        "$sequence", Long.toString(audioEndPacket.sequenceNumber()));
                 sessions.forwardAudioEnd(player.getUniqueId(), audioEndPacket.sequenceNumber());
             } else if (packet instanceof PlayerStatePacket statePacket) {
-                debug("Plasmo client " + player.getName() + " state voiceDisabled="
-                        + statePacket.voiceDisabled() + " microphoneMuted=" + statePacket.microphoneMuted() + ".");
+                debugLocalized("adapter-debug.client-state", "$adapter", "Plasmo", "$player", player.getName(),
+                        "$voiceDisabled", Boolean.toString(statePacket.voiceDisabled()), "$microphoneMuted",
+                        Boolean.toString(statePacket.microphoneMuted()));
                 playerStatesById.put(player.getUniqueId(), new PlasmoPlayerState(
                         statePacket.voiceDisabled(),
                         statePacket.microphoneMuted()
@@ -317,15 +318,16 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                         .flatMap(session -> context.audioBridge().entityIdentity(session.voiceCraftEntityId()))
                         .ifPresent(identity -> broadcastPlayerInfo(voicePlayerInfo(identity)));
             } else if (packet instanceof SourceInfoRequestPacket sourceInfoRequest) {
-                debug("Plasmo client " + player.getName() + " requested source info "
-                        + sourceInfoRequest.sourceId() + ".");
+                debugLocalized("adapter-debug.source-request", "$adapter", "Plasmo", "$player", player.getName(),
+                        "$source", sourceInfoRequest.sourceId().toString());
                 PlayerSourceInfo sourceInfo = sourcesById.get(sourceInfoRequest.sourceId());
                 if (sourceInfo != null) {
                     sendTcpPacket(player, new SourceInfoPacket(sourceInfo));
                 }
             }
         } catch (Exception exception) {
-            plugin.Logger.warn("Failed to decode Plasmo packet from " + player.getName() + ": " + exception.getMessage());
+            plugin.Logger.warnLocalized("adapter.packet-decode-failed", "$adapter", "Plasmo", "$player",
+                    player.getName(), "$error", exception.getMessage());
         }
     }
 
@@ -367,15 +369,15 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             return;
         }
         if (!plugin.isConnected()) {
-            plugin.Logger.warn("Plasmo client " + player.getName() + " joined before VoiceCraft was connected.");
+            plugin.Logger.warnLocalized("adapter.join-before-connected", "$adapter", "Plasmo", "$player", player.getName());
             return;
         }
 
         OptionalInt entityId = plugin.getSessionManager().createEntityForPlayer(player);
         if (entityId.isEmpty()) {
             String reason = plugin.getSessionManager().getLastCreateEntityFailure();
-            plugin.Logger.warn("Failed to create VoiceCraft entity for Plasmo client " + player.getName()
-                    + (reason.isBlank() ? "." : ": " + reason + "."));
+            plugin.Logger.warnLocalized("adapter.entity-create-failed", "$adapter", "Plasmo", "$player",
+                    player.getName(), "$reason", reason.isBlank() ? "" : ": " + reason);
             return;
         }
 
@@ -385,8 +387,9 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         context.audioBridge().registerEntityIdentity(new VoiceCraftEntityIdentity(entityId.getAsInt(),
                 player.getUniqueId(), player.getName(), id()));
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId.getAsInt(), session);
-        debug("Created Plasmo session for " + player.getName() + " entity=" + entityId.getAsInt()
-                + " secret=" + session.udpSecret() + " endpoint=" + publicHost + ":" + publicPort + ".");
+        debugLocalized("adapter-debug.session-created", "$adapter", "Plasmo", "$player", player.getName(),
+                "$entity", Integer.toString(entityId.getAsInt()), "$secret", session.udpSecret().toString(),
+                "$endpoint", publicHost + ":" + publicPort);
         registerProxyUdpRoute(player, session);
         sendTcpPacket(player, new ConnectionPacket(session.udpSecret(), publicHost, publicPort));
     }
@@ -413,10 +416,10 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 sendKeepAlivePackets();
             } catch (SocketException exception) {
                 if (running.get()) {
-                    plugin.Logger.warn("Plasmo UDP socket failed: " + exception.getMessage());
+                    plugin.Logger.warnLocalized("adapter.udp-socket-failed", "$adapter", "Plasmo", "$error", exception.getMessage());
                 }
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to handle Plasmo UDP packet: " + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.udp-handle-failed", "$adapter", "Plasmo", "$error", exception.getMessage());
             }
         }
     }
@@ -424,13 +427,13 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     private void handleUdpDatagram(byte[] payload, java.net.SocketAddress remoteAddress) throws IOException {
         PlasmoUdpEnvelope envelope = udpCodec.decode(payload);
         if (!sessions.handleUdpPacket(envelope, remoteAddress)) {
-            debug("Ignored Plasmo UDP packet with unknown secret " + envelope.secret() + ".");
+            debugLocalized("adapter-debug.unknown-secret", "$adapter", "Plasmo", "$secret", envelope.secret().toString());
             return;
         }
 
         if (envelope.packet() instanceof PingPacket) {
-            debug("Decoded Plasmo UDP packet type=" + envelope.type() + " secret=" + envelope.secret()
-                    + " from=" + remoteAddress + ".");
+            debugLocalized("adapter-debug.packet-decoded", "$adapter", "Plasmo", "$type", envelope.type().toString(),
+                    "$secret", envelope.secret().toString(), "$remote", remoteAddress.toString());
             sessions.bySecret(envelope.secret()).ifPresent(session ->
                     runPluginTask(() -> {
                         if (session.configSent()) {
@@ -449,7 +452,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                             sendTcpPacket(player, new SourceInfoPacket(sourceInfo));
                         });
                         session.markConfigSent();
-                        debug("Sent Plasmo config/player list to " + player.getName() + ".");
+                        debugLocalized("adapter-debug.config-sent", "$adapter", "Plasmo", "$player", player.getName());
                     })
             );
         } else {
@@ -465,7 +468,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 continue;
             }
             if (now - session.lastSeenMillis() > KEEP_ALIVE_TIMEOUT_MS) {
-                debug("Plasmo UDP session timed out for " + session.playerName() + ".");
+                debugLocalized("adapter-debug.session-timeout", "$adapter", "Plasmo", "$player", session.playerName());
                 cleanupExpiredSession(session);
                 continue;
             }
@@ -476,10 +479,11 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             try {
                 sendUdpPacket(new PingPacket(), session.udpSecret(), remoteAddress);
                 session.markKeepAliveSent();
-                debug("Sent Plasmo UDP keepalive secret=" + session.udpSecret() + " to=" + remoteAddress + ".");
+                debugLocalized("adapter-debug.keepalive-sent", "$adapter", "Plasmo", "$secret",
+                        session.udpSecret().toString(), "$remote", remoteAddress.toString());
             } catch (IOException exception) {
-                plugin.Logger.warn("Failed to send Plasmo UDP keepalive to " + session.playerName() + ": "
-                        + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.keepalive-send-failed", "$adapter", "Plasmo", "$player",
+                        session.playerName(), "$error", exception.getMessage());
             }
         }
     }
@@ -678,15 +682,17 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     private void sendTcpPacket(Player player, PlasmoPacket packet) {
         try {
             player.sendPluginMessage(plugin, PlasmoChannels.MAIN, tcpCodec.encode(packet));
-            debug("Sent Plasmo TCP packet " + packet.getClass().getSimpleName() + " to " + player.getName() + ".");
+            debugLocalized("adapter-debug.tcp-packet-sent", "$adapter", "Plasmo", "$type",
+                    packet.getClass().getSimpleName(), "$player", player.getName());
         } catch (Exception exception) {
-            plugin.Logger.warn("Failed to send Plasmo packet to " + player.getName() + ": " + exception.getMessage());
+            plugin.Logger.warnLocalized("adapter.packet-send-failed", "$adapter", "Plasmo", "$player",
+                    player.getName(), "$error", exception.getMessage());
         }
     }
 
-    private void debug(String message) {
+    private void debugLocalized(String key, String... replacements) {
         if (debug) {
-            plugin.Logger.info("[PlasmoAdapter] " + message);
+            plugin.Logger.info("[PlasmoAdapter] " + plugin.Logger.localized(key, replacements));
         }
     }
 
@@ -717,9 +723,10 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (now - audioDebugWindowMillis < 1000L) {
             return;
         }
-        plugin.Logger.info("[PlasmoAdapter] Audio frames last " + (now - audioDebugWindowMillis)
-                + "ms: received=" + receivedAudioFrames + " (" + receivedAudioBytes + " bytes), forwarded="
-                + forwardedAudioFrames + " (" + forwardedAudioBytes + " bytes).");
+        plugin.Logger.infoLocalized("adapter.audio-summary", "$adapter", "PlasmoAdapter", "$duration",
+                Long.toString(now - audioDebugWindowMillis), "$receivedFrames", Long.toString(receivedAudioFrames),
+                "$receivedBytes", Long.toString(receivedAudioBytes), "$forwardedFrames", Long.toString(forwardedAudioFrames),
+                "$forwardedBytes", Long.toString(forwardedAudioBytes), "$extra", "");
         audioDebugWindowMillis = now;
         receivedAudioFrames = 0;
         receivedAudioBytes = 0;

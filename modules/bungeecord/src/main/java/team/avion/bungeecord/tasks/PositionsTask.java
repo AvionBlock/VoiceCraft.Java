@@ -3,7 +3,7 @@ package team.avion.bungeecord.tasks;
 import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.chat.ComponentBuilder;
 import team.avion.bungeecord.VoiceCraftJava;
-import team.avion.bungeecord.utils.Language;
+import team.avion.common.localization.Language;
 
 public class PositionsTask implements Runnable {
     private final VoiceCraftJava plugin;

@@ -34,7 +34,8 @@ public class PluginMessageHandler {
                 try {
                     connection.get().sendPluginMessage(CHANNEL, message);
                 } catch (Exception exception) {
-                    plugin.Logger.debug("Failed to send bind sync to " + player.getUsername() + ": " + exception.getMessage());
+                    plugin.Logger.debugLocalized("proxy-message.bind-sync-player-failed", "$player", player.getUsername(),
+                            "$error", exception.getMessage());
                 }
             }
         }
@@ -43,7 +44,8 @@ public class PluginMessageHandler {
             try {
                 server.sendPluginMessage(CHANNEL, message);
             } catch (Exception exception) {
-                plugin.Logger.debug("Failed to send bind sync to server " + server.getServerInfo().getName() + ": " + exception.getMessage());
+                plugin.Logger.debugLocalized("proxy-message.bind-sync-server-failed", "$server",
+                        server.getServerInfo().getName(), "$error", exception.getMessage());
             }
         }
     }
@@ -82,10 +84,10 @@ public class PluginMessageHandler {
                 ProxyMessageCodec.UdpRouteUnregister route = ProxyMessageCodec.decodeUdpRouteUnregister(data);
                 plugin.getUdpRelayManager().unregisterRoute(route.adapterId(), route.routeKey());
             } else {
-                plugin.Logger.debug("Ignoring unknown proxy message type from " + serverName + ": " + type);
+                plugin.Logger.debugLocalized("proxy-message.unknown-type-from", "$server", serverName, "$type", type);
             }
         } catch (IllegalArgumentException exception) {
-            plugin.Logger.warn("Ignoring invalid proxy message from " + serverName + ": " + exception.getMessage());
+            plugin.Logger.warnLocalized("proxy-message.invalid-from", "$server", serverName, "$error", exception.getMessage());
         }
 
         event.setResult(PluginMessageEvent.ForwardResult.handled());

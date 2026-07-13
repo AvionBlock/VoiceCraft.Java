@@ -3,7 +3,7 @@ package team.avion.paper.tasks;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import team.avion.paper.VoiceCraftJava;
-import team.avion.paper.utils.Language;
+import team.avion.common.localization.Language;
 import team.avion.proxy.ProxyPlayerSnapshot;
 
 import net.kyori.adventure.text.Component;
@@ -253,7 +253,7 @@ public class PositionsTask extends BukkitRunnable {
         try {
             return plugin.getSessionManager().tick(snapshots);
         } catch (Exception exception) {
-            plugin.Logger.warn("VoiceCraft position update failed: " + exception.getMessage());
+            plugin.Logger.warnLocalized("session.position-update-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -262,7 +262,7 @@ public class PositionsTask extends BukkitRunnable {
         try {
             return plugin.reconnect(true);
         } catch (Exception exception) {
-            plugin.Logger.warn("VoiceCraft reconnect failed: " + exception.getMessage());
+            plugin.Logger.warnLocalized("session.reconnect-failed", "$error", exception.getMessage());
             return false;
         }
     }

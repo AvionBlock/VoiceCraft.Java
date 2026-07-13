@@ -7,7 +7,7 @@ import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
 import team.avion.bungeecord.VoiceCraftJava;
-import team.avion.bungeecord.utils.Language;
+import team.avion.common.localization.Language;
 
 public class PlayerQuitHandler implements Listener {
     private final VoiceCraftJava plugin;

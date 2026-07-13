@@ -31,7 +31,8 @@ public class PluginMessageHandler implements Listener {
             try {
                 server.sendData(CHANNEL, message, true);
             } catch (Exception exception) {
-                plugin.Logger.debug("Failed to send bind sync to server " + server.getName() + ": " + exception.getMessage());
+                plugin.Logger.debugLocalized("proxy-message.bind-sync-server-failed", "$server", server.getName(),
+                        "$error", exception.getMessage());
             }
         }
     }
@@ -43,7 +44,7 @@ public class PluginMessageHandler implements Listener {
         }
 
         if (!(event.getSender() instanceof Server backend)) {
-            plugin.Logger.warn("Ignoring " + CHANNEL + " plugin message from a non-backend connection.");
+            plugin.Logger.warnLocalized("proxy-message.non-backend", "$channel", CHANNEL);
             event.setCancelled(true);
             return;
         }
@@ -66,8 +67,7 @@ public class PluginMessageHandler implements Listener {
             } else if (ProxyMessageCodec.UDP_ROUTE_REGISTER.equals(type)) {
                 ProxyMessageCodec.UdpRouteRegister route = ProxyMessageCodec.decodeUdpRouteRegister(data);
                 if (!(backend.getInfo().getSocketAddress() instanceof InetSocketAddress backendAddress)) {
-                    plugin.Logger.warn("Ignoring UDP route from backend " + serverName
-                            + ": backend does not use an IP socket.");
+                    plugin.Logger.warnLocalized("proxy-message.route-non-ip", "$server", serverName);
                     event.setCancelled(true);
                     return;
                 }
@@ -78,10 +78,10 @@ public class PluginMessageHandler implements Listener {
                 ProxyMessageCodec.UdpRouteUnregister route = ProxyMessageCodec.decodeUdpRouteUnregister(data);
                 plugin.getUdpRelayManager().unregisterRoute(route.adapterId(), route.routeKey());
             } else {
-                plugin.Logger.debug("Ignoring unknown proxy message type from " + serverName + ": " + type);
+                plugin.Logger.debugLocalized("proxy-message.unknown-type-from", "$server", serverName, "$type", type);
             }
         } catch (IllegalArgumentException exception) {
-            plugin.Logger.warn("Ignoring invalid proxy message from " + serverName + ": " + exception.getMessage());
+            plugin.Logger.warnLocalized("proxy-message.invalid-from", "$server", serverName, "$error", exception.getMessage());
         }
 
         event.setCancelled(true);

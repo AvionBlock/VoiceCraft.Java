@@ -512,7 +512,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception exception) {
-                plugin.Logger.warn("VoiceCraft audio bridge worker failed: " + exception.getMessage());
+                plugin.Logger.warnLocalized("session.audio-worker-failed", "$error", exception.getMessage());
             }
         }
     }

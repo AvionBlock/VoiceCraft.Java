@@ -19,7 +19,7 @@ public class PluginMessageHandler implements PluginMessageListener {
             player.sendPluginMessage(plugin, ProxyMessageCodec.CHANNEL_NAME, ProxyMessageCodec.encodeSnapshot(snapshot));
             return true;
         } catch (Exception exception) {
-            plugin.Logger.debug("Failed to send proxy snapshot: " + exception.getMessage());
+            plugin.Logger.debugLocalized("proxy-message.snapshot-send-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -30,7 +30,7 @@ public class PluginMessageHandler implements PluginMessageListener {
                     ProxyMessageCodec.encodeBindRequest(player.getUniqueId().toString(), player.getName(), bindingKey));
             return true;
         } catch (Exception exception) {
-            plugin.Logger.debug("Failed to send proxy bind request: " + exception.getMessage());
+            plugin.Logger.debugLocalized("proxy-message.bind-send-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -41,7 +41,7 @@ public class PluginMessageHandler implements PluginMessageListener {
                     ProxyMessageCodec.encodeUnbindRequest(player.getUniqueId().toString(), player.getName()));
             return true;
         } catch (Exception exception) {
-            plugin.Logger.debug("Failed to send proxy unbind request: " + exception.getMessage());
+            plugin.Logger.debugLocalized("proxy-message.unbind-send-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -55,7 +55,7 @@ public class PluginMessageHandler implements PluginMessageListener {
                     ProxyMessageCodec.encodeUdpRouteRegister(adapterId, routeKey, backendPort));
             return true;
         } catch (Exception exception) {
-            plugin.Logger.debug("Failed to send proxy UDP route register: " + exception.getMessage());
+            plugin.Logger.debugLocalized("proxy-message.route-register-send-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -69,7 +69,7 @@ public class PluginMessageHandler implements PluginMessageListener {
                     ProxyMessageCodec.encodeUdpRouteUnregister(adapterId, routeKey));
             return true;
         } catch (Exception exception) {
-            plugin.Logger.debug("Failed to send proxy UDP route unregister: " + exception.getMessage());
+            plugin.Logger.debugLocalized("proxy-message.route-unregister-send-failed", "$error", exception.getMessage());
             return false;
         }
     }
@@ -84,12 +84,12 @@ public class PluginMessageHandler implements PluginMessageListener {
         try {
             String type = ProxyMessageCodec.peekType(message);
             if (!ProxyMessageCodec.BIND_SYNC.equals(type)) {
-                plugin.Logger.debug("Ignoring unknown proxy message type: " + type);
+                plugin.Logger.debugLocalized("proxy-message.unknown-type", "$type", type);
                 return;
             }
             bindSync = ProxyMessageCodec.decodeBindSync(message);
         } catch (IllegalArgumentException exception) {
-            plugin.Logger.warn("Ignoring invalid proxy message: " + exception.getMessage());
+            plugin.Logger.warnLocalized("proxy-message.invalid", "$error", exception.getMessage());
             return;
         }
 
@@ -100,9 +100,9 @@ public class PluginMessageHandler implements PluginMessageListener {
 
         plugin.getPlayerBinds().put(bindSync.playerName(), bindSync.bound());
         if (bindSync.bound()) {
-            plugin.Logger.info(bindSync.playerName() + " has joined the voicechat!");
+            plugin.Logger.infoLocalized("voicechat.joined", "$player", bindSync.playerName());
         } else {
-            plugin.Logger.info(bindSync.playerName() + " has left the voicechat!");
+            plugin.Logger.infoLocalized("voicechat.left", "$player", bindSync.playerName());
         }
     }
 }

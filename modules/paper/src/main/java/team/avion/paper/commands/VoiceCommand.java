@@ -12,7 +12,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import team.avion.paper.VoiceCraftJava;
-import team.avion.paper.utils.Language;
+import team.avion.common.localization.Language;
 import team.avion.common.commands.BaseVoiceCommand;
 import team.avion.common.utils.IntegerOperation;
 import team.avion.common.utils.StringOperation;

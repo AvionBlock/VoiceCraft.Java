@@ -11,6 +11,12 @@ import net.kyori.adventure.text.format.TextDecoration;
 
 public class PaperLogger extends BaseLogger {
 
+    @Override
+    protected String language() {
+        VoiceCraftJava plugin = VoiceCraftJava.getInstance();
+        return plugin == null ? null : plugin.getLanguage();
+    }
+
     public void log(Component msg) {
         ConsoleCommandSender console = Bukkit.getServer().getConsoleSender();
         Component coloredLogo = Component.text("[")

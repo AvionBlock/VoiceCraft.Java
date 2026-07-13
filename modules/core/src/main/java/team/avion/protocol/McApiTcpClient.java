@@ -73,22 +73,22 @@ public final class McApiTcpClient {
             for (McApiPacket packet : responsePackets) {
                 if (packet instanceof AcceptResponsePacket accept) {
                     sessionToken = accept.Token;
-                    logger.info("VoiceCraft McApi session established.");
+                    logger.infoLocalized("mcapi.session-established");
                     return true;
                 }
                 if (packet instanceof DenyResponsePacket deny) {
                     lastDenyReason = deny.Reason;
-                    logger.error("VoiceCraft login denied: " + deny.Reason);
+                    logger.errorLocalized("mcapi.login-denied", "$reason", deny.Reason);
                     close();
                     return false;
                 }
             }
 
-            logger.error("VoiceCraft login failed: no accept response received.");
+            logger.errorLocalized("mcapi.login-no-accept");
             close();
             return false;
         } catch (Exception ex) {
-            logger.error("VoiceCraft TCP connect failed: " + ex.getMessage());
+            logger.errorLocalized("mcapi.connect-failed", "$error", ex.getMessage());
             close();
             return false;
         }
@@ -102,11 +102,11 @@ public final class McApiTcpClient {
         try {
             return exchangeInternal(sessionToken, packets);
         } catch (SocketTimeoutException ex) {
-            logger.error("VoiceCraft TCP request timed out: " + ex.getMessage());
+            logger.errorLocalized("mcapi.request-timeout", "$error", ex.getMessage());
             close();
             return List.of();
         } catch (Exception ex) {
-            logger.error("VoiceCraft TCP request failed: " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
+            logger.errorLocalized("mcapi.request-failed", "$type", ex.getClass().getSimpleName(), "$error", ex.getMessage());
             close();
             return List.of();
         }
@@ -123,7 +123,7 @@ public final class McApiTcpClient {
             logoutPacket.Token = sessionToken;
             exchangeInternal(sessionToken, List.of(logoutPacket));
         } catch (Exception exception) {
-            logger.debug("VoiceCraft TCP logout failed: " + exception.getMessage());
+            logger.debugLocalized("mcapi.logout-failed", "$error", exception.getMessage());
         } finally {
             close();
         }
@@ -149,21 +149,21 @@ public final class McApiTcpClient {
             try {
                 input.close();
             } catch (IOException exception) {
-                logger.debug("Failed to close VoiceCraft TCP input stream: " + exception.getMessage());
+                logger.debugLocalized("mcapi.close-input-failed", "$error", exception.getMessage());
             }
         }
         if (output != null) {
             try {
                 output.close();
             } catch (IOException exception) {
-                logger.debug("Failed to close VoiceCraft TCP output stream: " + exception.getMessage());
+                logger.debugLocalized("mcapi.close-output-failed", "$error", exception.getMessage());
             }
         }
         if (socket != null) {
             try {
                 socket.close();
             } catch (IOException exception) {
-                logger.debug("Failed to close VoiceCraft TCP socket: " + exception.getMessage());
+                logger.debugLocalized("mcapi.close-socket-failed", "$error", exception.getMessage());
             }
         }
 

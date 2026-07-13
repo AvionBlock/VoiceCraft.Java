@@ -27,10 +27,10 @@ import team.avion.bungeecord.listeners.PlayerQuitHandler;
 import team.avion.bungeecord.listeners.PluginMessageHandler;
 import team.avion.bungeecord.tasks.PositionsTask;
 import team.avion.bungeecord.utils.BungeecordLogger;
-import team.avion.bungeecord.utils.Language;
 import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
+import team.avion.common.localization.Language;
 import team.avion.proxy.VoiceCraftProxySessionManager;
 import team.avion.proxy.VoiceProxyUdpRelayManager;
 
@@ -54,6 +54,10 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
     private final @Getter Map<String, Boolean> playerBinds = new HashMap<>();
     private @Getter String token = "";
     private String lang;
+
+    public String getLanguage() {
+        return lang;
+    }
     private final @Getter PluginMessageHandler messageHandler = new PluginMessageHandler(this);
     private final @Getter VoiceCraftProxySessionManager sessionManager;
     private final @Getter VoiceProxyUdpRelayManager udpRelayManager;
@@ -78,7 +82,6 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
         }
         reloadConfig();
         lang = resolveConfiguredLanguage();
-        Language.init(this);
 
         getProxy().registerChannel(PluginMessageHandler.CHANNEL);
         getProxy().getPluginManager().registerListener(this, messageHandler);
@@ -310,7 +313,7 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
         try {
             config = ConfigurationProvider.getProvider(YamlConfiguration.class).load(new File(getDataFolder(), "config.yml"));
         } catch (IOException exception) {
-            Logger.error("Could not reload config: " + exception.getMessage());
+            Logger.errorLocalized("config.reload-failed", "$error", exception.getMessage());
         }
     }
 
@@ -330,7 +333,7 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
         try {
             ConfigurationProvider.getProvider(YamlConfiguration.class).save(config, new File(getDataFolder(), "config.yml"));
         } catch (IOException exception) {
-            Logger.error("Could not save config: " + exception.getMessage());
+            Logger.errorLocalized("config.save-failed", "$error", exception.getMessage());
         }
     }
 
@@ -366,7 +369,8 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
                 }
             }
         } catch (IOException ex) {
-            Logger.error("Could not save " + resourcePath + " to " + new File(getDataFolder(), resourcePath));
+            Logger.errorLocalized("config.resource-save-path-failed", "$resource", resourcePath, "$path",
+                    new File(getDataFolder(), resourcePath).toString());
         }
     }
 
@@ -393,7 +397,7 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
             ConfigTemplateWriter.write(input, target.toPath(),
                     Map.of("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString()));
         } catch (IOException exception) {
-            Logger.error("Could not create localized config.yml: " + exception.getMessage());
+            Logger.errorLocalized("config.localized-create-failed", "$error", exception.getMessage());
         }
     }
 
@@ -405,9 +409,9 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
     private boolean migrateConfigIfNeeded() {
         int configVersion = getConfig().getInt(CONFIG_VERSION_PATH, 0);
         if (configVersion > CURRENT_CONFIG_VERSION) {
-            Logger.error("Config version " + configVersion + " is newer than supported version "
-                    + CURRENT_CONFIG_VERSION + ".");
-            Logger.error("VoiceCraft.Java will not start. Move config.yml away and let the plugin generate a new config.");
+            Logger.errorLocalized("config.version-too-new", "$version", Integer.toString(configVersion),
+                    "$supported", Integer.toString(CURRENT_CONFIG_VERSION));
+            Logger.errorLocalized("config.start-aborted");
             return false;
         }
         if (configVersion == CURRENT_CONFIG_VERSION) {
@@ -427,10 +431,11 @@ public class VoiceCraftJava extends Plugin implements BaseVoiceCraftJava {
             mergeMissingConfig(config, defaultConfig, "");
             config.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             saveConfig();
-            Logger.info("Updated config.yml from version " + configVersion + " to " + CURRENT_CONFIG_VERSION + ".");
+            Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",
+                    Integer.toString(CURRENT_CONFIG_VERSION));
             return true;
         } catch (Exception exception) {
-            Logger.error("Could not migrate config.yml: " + exception.getMessage());
+            Logger.errorLocalized("config.migrate-failed", "$error", exception.getMessage());
             return false;
         }
     }

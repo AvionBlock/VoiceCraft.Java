@@ -155,8 +155,9 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         context.audioBridge().registerAudioSink(this);
         context.audioBridge().registerIdentityListener(this);
         state = AdapterState.RUNNING;
-        plugin.Logger.info("Simple Voice Chat adapter listening on " + bindHost + ":" + udpPort
-                + " and advertising " + (voiceHost.isBlank() ? "<minecraft host>" : voiceHost) + ":" + publicPort + ".");
+        plugin.Logger.infoLocalized("adapter.listening", "$adapter", "Simple Voice Chat", "$bindHost", bindHost,
+                "$bindPort", Integer.toString(udpPort), "$publicHost",
+                voiceHost.isBlank() ? "<minecraft host>" : voiceHost, "$publicPort", Integer.toString(publicPort));
     }
 
     @Override
@@ -233,8 +234,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                 sendUdpPacket(packet, receiver);
                 debugForwardedAudio(opusFrame.length);
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to forward Simple Voice Chat audio to " + receiver.playerName()
-                        + ": " + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.audio-forward-failed", "$adapter", "Simple Voice Chat", "$player",
+                        receiver.playerName(), "$error", exception.getMessage());
             }
         }
     }
@@ -270,15 +271,15 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         try {
             int clientCompatibilityVersion = tcpCodec.decodeRequestSecret(message);
             if (clientCompatibilityVersion != compatibilityVersion) {
-                plugin.Logger.warn("Simple Voice Chat client " + player.getName()
-                        + " has incompatible compatibility version " + clientCompatibilityVersion
-                        + " (server=" + compatibilityVersion + ").");
+                plugin.Logger.warnLocalized("adapter.incompatible-version", "$adapter", "Simple Voice Chat", "$player",
+                        player.getName(), "$clientVersion", Integer.toString(clientCompatibilityVersion), "$serverVersion",
+                        Integer.toString(compatibilityVersion));
                 return;
             }
             handleRequestSecret(player);
         } catch (Exception exception) {
-            plugin.Logger.warn("Failed to decode Simple Voice Chat packet from " + player.getName()
-                    + ": " + exception.getMessage());
+            plugin.Logger.warnLocalized("adapter.packet-decode-failed", "$adapter", "Simple Voice Chat", "$player",
+                    player.getName(), "$error", exception.getMessage());
         }
     }
 
@@ -295,7 +296,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
 
     private void handleRequestSecret(Player player) {
         if (!plugin.isConnected()) {
-            plugin.Logger.warn("Simple Voice Chat client " + player.getName() + " joined before VoiceCraft was connected.");
+            plugin.Logger.warnLocalized("adapter.join-before-connected", "$adapter", "Simple Voice Chat", "$player", player.getName());
             return;
         }
 
@@ -303,16 +304,16 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         if (existingSession.isPresent()) {
             registerProxyUdpRoute(player, existingSession.get());
             sendSecret(player, existingSession.get());
-            debug("Resent Simple Voice Chat secret to " + player.getName()
-                    + " entity=" + existingSession.get().voiceCraftEntityId() + ".");
+            debugLocalized("adapter-debug.secret-resent", "$adapter", "Simple Voice Chat", "$player", player.getName(),
+                    "$entity", Integer.toString(existingSession.get().voiceCraftEntityId()));
             return;
         }
 
         OptionalInt entityId = plugin.getSessionManager().createEntityForPlayer(player);
         if (entityId.isEmpty()) {
             String reason = plugin.getSessionManager().getLastCreateEntityFailure();
-            plugin.Logger.warn("Failed to create VoiceCraft entity for Simple Voice Chat client " + player.getName()
-                    + (reason.isBlank() ? "." : ": " + reason + "."));
+            plugin.Logger.warnLocalized("adapter.entity-create-failed", "$adapter", "Simple Voice Chat", "$player",
+                    player.getName(), "$reason", reason.isBlank() ? "" : ": " + reason);
             return;
         }
 
@@ -326,7 +327,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         context.audioBridge().registerEntityIdentity(identity);
         registerProxyUdpRoute(player, session);
         sendSecret(player, session);
-        debug("Sent Simple Voice Chat secret to " + player.getName() + " entity=" + entityId.getAsInt() + ".");
+        debugLocalized("adapter-debug.secret-sent", "$adapter", "Simple Voice Chat", "$player", player.getName(),
+                "$entity", Integer.toString(entityId.getAsInt()));
     }
 
     private void registerProxyUdpRoute(Player player, SimpleVoiceChatClientSession session) {
@@ -353,12 +355,12 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
 
     private void sendSecretPacket(Player player, byte[] payload) {
         if (sendNmsCustomPayload(player, SimpleVoiceChatChannels.SECRET, payload)) {
-            debug("Sent Simple Voice Chat secret via NMS custom payload to " + player.getName() + ".");
+            debugLocalized("adapter-debug.secret-nms-sent", "$adapter", "Simple Voice Chat", "$player", player.getName());
             return;
         }
 
         player.sendPluginMessage(plugin, SimpleVoiceChatChannels.SECRET, payload);
-        debug("Sent Simple Voice Chat secret via Bukkit plugin message to " + player.getName() + ".");
+        debugLocalized("adapter-debug.secret-bukkit-sent", "$adapter", "Simple Voice Chat", "$player", player.getName());
     }
 
     private void sendInitialStates(Player player) {
@@ -427,8 +429,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
             send.invoke(connection, packet);
             return true;
         } catch (Exception exception) {
-            debug("Falling back to Bukkit plugin message for Simple Voice Chat secret: "
-                    + exception.getClass().getSimpleName() + ": " + exception.getMessage() + ".");
+            debugLocalized("adapter-debug.secret-fallback", "$adapter", "Simple Voice Chat", "$type",
+                    exception.getClass().getSimpleName(), "$error", exception.getMessage());
             return false;
         }
     }
@@ -463,11 +465,11 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                 sendKeepAlives();
             } catch (SocketException exception) {
                 if (running.get()) {
-                    plugin.Logger.warn("Simple Voice Chat UDP socket failed: " + exception.getMessage());
+                    plugin.Logger.warnLocalized("adapter.udp-socket-failed", "$adapter", "Simple Voice Chat", "$error", exception.getMessage());
                 }
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to handle Simple Voice Chat UDP packet: "
-                        + exception.getClass().getSimpleName() + ": " + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.udp-handle-typed-failed", "$adapter", "Simple Voice Chat", "$type",
+                        exception.getClass().getSimpleName(), "$error", exception.getMessage());
             }
         }
     }
@@ -477,36 +479,37 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                 playerId -> sessions.byPlayerId(playerId).map(SimpleVoiceChatClientSession::secret).orElse(null));
         Optional<SimpleVoiceChatClientSession> optionalSession = sessions.byPlayerId(envelope.playerId());
         if (optionalSession.isEmpty()) {
-            debug("Ignored Simple Voice Chat UDP packet for unknown player " + envelope.playerId() + ".");
+            debugLocalized("adapter-debug.unknown-player", "$adapter", "Simple Voice Chat", "$playerId",
+                    envelope.playerId().toString());
             return;
         }
 
         SimpleVoiceChatClientSession session = optionalSession.get();
         if (envelope.packet() instanceof AuthenticatePacket authenticatePacket) {
-            debug("Decoded Simple Voice Chat UDP packet " + envelope.packet().type()
-                    + " from " + session.playerName() + " at " + remoteAddress + ".");
+            debugLocalized("adapter-debug.svc-packet-decoded", "$type", envelope.packet().type().toString(), "$player",
+                    session.playerName(), "$remote", remoteAddress.toString());
             if (!authenticatePacket.playerId().equals(session.playerId())) {
-                debug("Ignored Simple Voice Chat auth with mismatched player id " + authenticatePacket.playerId() + ".");
+                debugLocalized("adapter-debug.auth-player-mismatch", "$playerId", authenticatePacket.playerId().toString());
                 return;
             }
             if (!authenticatePacket.secret().equals(session.secret())) {
-                debug("Ignored Simple Voice Chat auth with mismatched secret from " + session.playerName() + ".");
+                debugLocalized("adapter-debug.auth-secret-mismatch", "$player", session.playerName());
                 return;
             }
             session.touch(remoteAddress);
             session.markAuthenticated();
             sendUdpPacket(new SimplePacket(SimpleVoiceChatPacketType.AUTHENTICATE_ACK), session);
-            debug("Authenticated Simple Voice Chat UDP session for " + session.playerName() + ".");
+            debugLocalized("adapter-debug.authenticated", "$adapter", "Simple Voice Chat", "$player", session.playerName());
         } else if (envelope.packet() instanceof SimplePacket simplePacket
                 && simplePacket.type() == SimpleVoiceChatPacketType.CONNECTION_CHECK) {
             if (!session.authenticated() || !remoteAddress.equals(session.remoteAddress())) {
-                debug("Ignored Simple Voice Chat connection check before authentication for "
-                        + session.playerName() + ".");
+                debugLocalized("adapter-debug.check-before-auth", "$adapter", "Simple Voice Chat", "$player",
+                        session.playerName());
                 return;
             }
             session.touch(remoteAddress);
-            debug("Decoded Simple Voice Chat UDP packet " + envelope.packet().type()
-                    + " from " + session.playerName() + " at " + remoteAddress + ".");
+            debugLocalized("adapter-debug.svc-packet-decoded", "$type", envelope.packet().type().toString(), "$player",
+                    session.playerName(), "$remote", remoteAddress.toString());
             session.markConnected();
             sendUdpPacket(new SimplePacket(SimpleVoiceChatPacketType.CONNECTION_CHECK_ACK), session);
             runPluginTask(() -> {
@@ -515,14 +518,14 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                     sendInitialStates(player);
                 }
             });
-            debug("Validated Simple Voice Chat UDP session for " + session.playerName() + ".");
+            debugLocalized("adapter-debug.validated", "$adapter", "Simple Voice Chat", "$player", session.playerName());
         } else if (!session.connected() || !remoteAddress.equals(session.remoteAddress())) {
-            debug("Ignored Simple Voice Chat UDP packet before connection validation for "
-                    + session.playerName() + ".");
+            debugLocalized("adapter-debug.before-validation", "$adapter", "Simple Voice Chat", "$player",
+                    session.playerName());
         } else if (envelope.packet() instanceof SimplePacket simplePacket
                 && simplePacket.type() == SimpleVoiceChatPacketType.KEEP_ALIVE) {
             session.touch(remoteAddress);
-            debug("Received Simple Voice Chat keepalive from " + session.playerName() + ".");
+            debugLocalized("adapter-debug.keepalive-received", "$adapter", "Simple Voice Chat", "$player", session.playerName());
         } else if (envelope.packet() instanceof MicPacket micPacket) {
             session.touch(remoteAddress);
             debugReceivedAudio(micPacket.data().length);
@@ -537,7 +540,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                 continue;
             }
             if (now - session.lastSeenMillis() >= keepAliveMillis * KEEP_ALIVE_TIMEOUT_FACTOR) {
-                debug("Simple Voice Chat UDP session timed out for " + session.playerName() + ".");
+                debugLocalized("adapter-debug.session-timeout", "$adapter", "Simple Voice Chat", "$player", session.playerName());
                 cleanupExpiredSession(session);
                 continue;
             }
@@ -549,8 +552,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                 sendUdpPacket(new SimplePacket(SimpleVoiceChatPacketType.KEEP_ALIVE), session);
                 session.markKeepAliveSent();
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to send Simple Voice Chat keepalive to " + session.playerName()
-                        + ": " + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.keepalive-send-failed", "$adapter", "Simple Voice Chat", "$player",
+                        session.playerName(), "$error", exception.getMessage());
             }
         }
     }
@@ -609,8 +612,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
             try {
                 sendUdpPacket(packet, receiver);
             } catch (Exception exception) {
-                plugin.Logger.warn("Failed to finish Simple Voice Chat audio for " + receiver.playerName()
-                        + ": " + exception.getMessage());
+                plugin.Logger.warnLocalized("adapter.audio-finish-failed", "$adapter", "Simple Voice Chat", "$player",
+                        receiver.playerName(), "$error", exception.getMessage());
             }
         }
     }
@@ -634,9 +637,9 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         }
     }
 
-    private void debug(String message) {
+    private void debugLocalized(String key, String... replacements) {
         if (debug) {
-            plugin.Logger.info("[SimpleVoiceChatAdapter] " + message);
+            plugin.Logger.info("[SimpleVoiceChatAdapter] " + plugin.Logger.localized(key, replacements));
         }
     }
 
@@ -691,11 +694,11 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         if (now - audioDebugWindowMillis < 1000L) {
             return;
         }
-        plugin.Logger.info("[SimpleVoiceChatAdapter] Audio frames last " + (now - audioDebugWindowMillis)
-                + "ms: received=" + receivedAudioFrames + " (" + receivedAudioBytes + " bytes), forwarded="
-                + forwardedAudioFrames + " (" + forwardedAudioBytes + " bytes), svcEmptyMic=" + svcEmptyMicPackets
-                + ", svcAudioEndSent=" + svcAudioEndsSent + ", svcAudioEndCancelledByAudio="
-                + svcAudioEndsCancelledByAudio + ".");
+        plugin.Logger.infoLocalized("adapter.svc-audio-summary", "$duration", Long.toString(now - audioDebugWindowMillis),
+                "$receivedFrames", Long.toString(receivedAudioFrames), "$receivedBytes", Long.toString(receivedAudioBytes),
+                "$forwardedFrames", Long.toString(forwardedAudioFrames), "$forwardedBytes", Long.toString(forwardedAudioBytes),
+                "$emptyMic", Long.toString(svcEmptyMicPackets), "$audioEndSent", Long.toString(svcAudioEndsSent),
+                "$audioEndCancelled", Long.toString(svcAudioEndsCancelledByAudio));
         audioDebugWindowMillis = now;
         receivedAudioFrames = 0;
         receivedAudioBytes = 0;

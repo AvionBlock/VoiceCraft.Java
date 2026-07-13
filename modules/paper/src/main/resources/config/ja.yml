@@ -1,4 +1,4 @@
-config-version: 6 # 編集しないでください: configの自動移行に使用されます
+config-version: 7 # 編集しないでください: configの自動移行に使用されます
 
 config:
   debug: false # 追加のデバッグログを有効化します
@@ -45,6 +45,26 @@ config:
     proximity-distance: 30 # ボイスの最大距離
     proximity-toggle: true # 距離ベース処理を有効化します
     voice-effects: true # 洞窟/水中エフェクトを有効化します
+
+    vanilla-status-overlay:
+      enabled: true # SVC/Plasmoを使用しないプレイヤー間だけで状態を表示します
+      update-interval-ticks: 5 # 位置と表示状態の更新間隔
+      handshake-grace-ticks: 60 # vanilla判定前にmodチャンネルを待つ時間
+      speaking-hold-ms: 600 # 最後の音声フレーム後に発話状態を維持する時間
+      height-offset: 2.55 # プレイヤーの足元からの表示高さ
+      view-distance: 48 # 最大表示距離
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
+      colors:
+        disconnected: "dark_gray"
+        connected: "gray"
+        speaking: "green"
+        muted: "red"
+        deafened: "yellow"
 
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost

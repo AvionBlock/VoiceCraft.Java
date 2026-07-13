@@ -37,6 +37,10 @@ import team.avion.protocol.McPackets.EventRequestPacket;
 import team.avion.protocol.McPackets.McApiPacket;
 import team.avion.protocol.McPackets.OnEntityAudioDataReceivedPacket;
 import team.avion.protocol.McPackets.OnEntityDestroyedPacket;
+import team.avion.protocol.McPackets.OnEntityDeafenUpdatedPacket;
+import team.avion.protocol.McPackets.OnEntityMuteUpdatedPacket;
+import team.avion.protocol.McPackets.OnEntityServerDeafenUpdatedPacket;
+import team.avion.protocol.McPackets.OnEntityServerMuteUpdatedPacket;
 import team.avion.protocol.McPackets.OnNetworkEntityCreatedPacket;
 import team.avion.protocol.McPackets.PingRequestPacket;
 import team.avion.protocol.McPackets.ProximityEffect;
@@ -71,6 +75,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private final Map<String, BoundEntity> boundEntitiesByPlayerName = new HashMap<>();
     private final Map<Integer, VoiceCraftEntityIdentity> entityIdentitiesById = new HashMap<>();
     private final Map<UUID, VoiceCraftPlayerState> playerVoiceStatesById = new HashMap<>();
+    private final Map<Integer, NativeVoiceState> nativeVoiceStatesByEntityId = new HashMap<>();
 
     private String host = "";
     private int port;
@@ -338,6 +343,10 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     public synchronized void registerEntityIdentity(VoiceCraftEntityIdentity identity) {
         if (identity != null) {
             VoiceCraftEntityIdentity previous = entityIdentitiesById.put(identity.entityId(), identity);
+            NativeVoiceState nativeState = nativeVoiceStatesByEntityId.get(identity.entityId());
+            if (nativeState != null && "voicecraft".equals(identity.adapterId())) {
+                updatePlayerVoiceState(nativeState.toPlayerState(identity.playerId()));
+            }
             if (!identity.equals(previous)) {
                 notifyIdentityRegistered(identity);
             }
@@ -347,6 +356,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     @Override
     public synchronized void unregisterEntityIdentity(int entityId) {
         VoiceCraftEntityIdentity removed = entityIdentitiesById.remove(entityId);
+        nativeVoiceStatesByEntityId.remove(entityId);
         if (removed != null) {
             boolean playerStillRegistered = entityIdentitiesById.values().stream()
                     .anyMatch(identity -> identity.playerId().equals(removed.playerId()));
@@ -522,7 +532,34 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
             }
             if (packet instanceof OnEntityAudioDataReceivedPacket audioPacket) {
                 handleEntityAudio(audioPacket);
+                continue;
             }
+            if (packet instanceof OnEntityMuteUpdatedPacket mutePacket) {
+                updateNativeVoiceState(mutePacket.Id, state -> state.withMuted(mutePacket.Value));
+                continue;
+            }
+            if (packet instanceof OnEntityDeafenUpdatedPacket deafenPacket) {
+                updateNativeVoiceState(deafenPacket.Id, state -> state.withDeafened(deafenPacket.Value));
+                continue;
+            }
+            if (packet instanceof OnEntityServerMuteUpdatedPacket mutePacket) {
+                updateNativeVoiceState(mutePacket.Id, state -> state.withServerMuted(mutePacket.Value));
+                continue;
+            }
+            if (packet instanceof OnEntityServerDeafenUpdatedPacket deafenPacket) {
+                updateNativeVoiceState(deafenPacket.Id, state -> state.withServerDeafened(deafenPacket.Value));
+            }
+        }
+    }
+
+    private synchronized void updateNativeVoiceState(int entityId,
+            java.util.function.UnaryOperator<NativeVoiceState> updater) {
+        NativeVoiceState updated = updater.apply(nativeVoiceStatesByEntityId.getOrDefault(entityId,
+                NativeVoiceState.DEFAULT));
+        nativeVoiceStatesByEntityId.put(entityId, updated);
+        VoiceCraftEntityIdentity identity = entityIdentitiesById.get(entityId);
+        if (identity != null && "voicecraft".equals(identity.adapterId())) {
+            updatePlayerVoiceState(updated.toPlayerState(identity.playerId()));
         }
     }
 
@@ -743,6 +780,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         boundEntitiesByPlayerName.clear();
         entityIdentitiesById.clear();
         playerVoiceStatesById.clear();
+        nativeVoiceStatesByEntityId.clear();
         identities.forEach(this::notifyIdentityUnregistered);
         plugin.getPlayerBinds().clear();
     }
@@ -870,6 +908,30 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     }
 
     private record PendingAudioFrame(int entityId, int timestamp, float loudness, byte[] opusFrame) {
+    }
+
+    private record NativeVoiceState(boolean muted, boolean deafened, boolean serverMuted, boolean serverDeafened) {
+        private static final NativeVoiceState DEFAULT = new NativeVoiceState(false, false, false, false);
+
+        private NativeVoiceState withMuted(boolean value) {
+            return new NativeVoiceState(value, deafened, serverMuted, serverDeafened);
+        }
+
+        private NativeVoiceState withDeafened(boolean value) {
+            return new NativeVoiceState(muted, value, serverMuted, serverDeafened);
+        }
+
+        private NativeVoiceState withServerMuted(boolean value) {
+            return new NativeVoiceState(muted, deafened, value, serverDeafened);
+        }
+
+        private NativeVoiceState withServerDeafened(boolean value) {
+            return new NativeVoiceState(muted, deafened, serverMuted, value);
+        }
+
+        private VoiceCraftPlayerState toPlayerState(UUID playerId) {
+            return new VoiceCraftPlayerState(playerId, deafened || serverDeafened, muted || serverMuted);
+        }
     }
 
     private static final class BoundEntity {

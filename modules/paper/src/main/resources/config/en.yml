@@ -1,4 +1,4 @@
-config-version: 6 # DO NOT EDIT: used for automatic config migrations
+config-version: 7 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false                   # Enable additional debug logging
@@ -45,6 +45,26 @@ config:
     proximity-distance: 30       # Maximum voice distance
     proximity-toggle: true       # Enable proximity processing
     voice-effects: true          # Enable cave/water voice effects
+
+    vanilla-status-overlay:
+      enabled: true                    # Show statuses to and above players without SVC or Plasmo
+      update-interval-ticks: 5         # Overlay visibility and position refresh interval
+      handshake-grace-ticks: 60        # Wait for mod channels before treating a client as vanilla
+      speaking-hold-ms: 600            # Keep speaking state after the latest audio frame
+      height-offset: 2.55              # Hologram height above player feet
+      view-distance: 48                # Maximum overlay visibility distance
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
+      colors:
+        disconnected: "dark_gray"
+        connected: "gray"
+        speaking: "green"
+        muted: "red"
+        deafened: "yellow"
 
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost

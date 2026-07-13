@@ -66,6 +66,10 @@ public final class McApiTcpClient {
                     EventType.ON_NETWORK_ENTITY_CREATED,
                     EventType.ON_ENTITY_CREATED,
                     EventType.ON_ENTITY_DESTROYED,
+                    EventType.ON_ENTITY_MUTE_UPDATED,
+                    EventType.ON_ENTITY_DEAFEN_UPDATED,
+                    EventType.ON_ENTITY_SERVER_MUTE_UPDATED,
+                    EventType.ON_ENTITY_SERVER_DEAFEN_UPDATED,
                     EventType.ON_ENTITY_AUDIO_DATA_RECEIVED
             };
 

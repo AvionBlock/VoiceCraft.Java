@@ -1,4 +1,4 @@
-config-version: 6 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
+config-version: 7 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
 
 config:
   debug: false # Включить дополнительное логирование
@@ -45,6 +45,26 @@ config:
     proximity-distance: 30 # Максимальная дистанция голоса
     proximity-toggle: true # Включить обработку proximity
     voice-effects: true # Включить эффекты пещеры и воды
+
+    vanilla-status-overlay:
+      enabled: true # Показывать статусы только игрокам без SVC или Plasmo и только над такими игроками
+      update-interval-ticks: 5 # Интервал обновления позиции и видимости
+      handshake-grace-ticks: 60 # Ожидание каналов мода перед определением vanilla-клиента
+      speaking-hold-ms: 600 # Сколько сохранять статус разговора после последнего аудиофрейма
+      height-offset: 2.55 # Высота голограммы над ногами игрока
+      view-distance: 48 # Максимальная дистанция отображения
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
+      colors:
+        disconnected: "dark_gray"
+        connected: "gray"
+        speaking: "green"
+        muted: "red"
+        deafened: "yellow"
 
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost

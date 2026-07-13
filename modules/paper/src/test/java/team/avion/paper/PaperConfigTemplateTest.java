@@ -17,7 +17,10 @@ class PaperConfigTemplateTest {
                 assertNotNull(input, resource);
                 String config = new String(input.readAllBytes(), StandardCharsets.UTF_8);
 
-                assertTrue(config.startsWith("config-version: 6"), resource);
+                assertTrue(config.startsWith("config-version: 7"), resource);
+                for (String status : List.of("disconnected", "connected", "speaking", "muted", "deafened")) {
+                    assertTrue(config.contains(status + ": \""), resource + " missing symbol " + status);
+                }
                 assertEquals(1, config.lines()
                                 .filter(line -> line.stripLeading().startsWith("host: \"0.0.0.0\""))
                                 .count(),

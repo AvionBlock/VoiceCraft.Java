@@ -1,4 +1,4 @@
-config-version: 6 # NIET AANPASSEN: gebruikt voor automatische configmigraties
+config-version: 7 # NIET AANPASSEN: gebruikt voor automatische configmigraties
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -45,6 +45,26 @@ config:
     proximity-distance: 30 # Maximale spraakafstand
     proximity-toggle: true # Proximity-verwerking inschakelen
     voice-effects: true # Grot- en watereffecten inschakelen
+
+    vanilla-status-overlay:
+      enabled: true # Toon statussen alleen tussen spelers zonder SVC of Plasmo
+      update-interval-ticks: 5 # Interval voor positie- en zichtbaarheidsupdates
+      handshake-grace-ticks: 60 # Wacht op modkanalen voordat een client als vanilla geldt
+      speaking-hold-ms: 600 # Houd de spreekstatus vast na het laatste audioframe
+      height-offset: 2.55 # Hoogte van het hologram boven de voeten
+      view-distance: 48 # Maximale zichtafstand
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
+      colors:
+        disconnected: "dark_gray"
+        connected: "gray"
+        speaking: "green"
+        muted: "red"
+        deafened: "yellow"
 
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost

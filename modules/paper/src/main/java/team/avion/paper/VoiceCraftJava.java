@@ -22,6 +22,7 @@ import team.avion.paper.listeners.*;
 import team.avion.paper.tasks.PositionsTask;
 import team.avion.paper.utils.*;
 import team.avion.paper.voicecraft.PaperVoiceCraftSessionManager;
+import team.avion.paper.voicecraft.PlayerVoiceStatusOverlay;
 import team.avion.paper.voicecraft.VoiceCraftProcessManager;
 import team.avion.proxy.ProxyMessageCodec;
 
@@ -37,7 +38,7 @@ import java.util.Map;
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 6;
+    private static final int CURRENT_CONFIG_VERSION = 7;
     private static final String PLASMO_PUBLIC_HOST_PATH = "config.adapters.plasmo.public.host";
     private static final String[] REMOVED_VOICE_UI_PATHS = {
             "config.voice.status-icons",
@@ -70,6 +71,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private final @Getter PluginMessageHandler messageHandler = new PluginMessageHandler(this);
     private @Getter VoiceCraftProcessManager voiceCraftProcessManager;
     private @Getter PaperVoiceCraftSessionManager sessionManager;
+    private PlayerVoiceStatusOverlay voiceStatusOverlay;
     private @Getter PositionsTask positionsTask;
     private PaperPlasmoVoiceAdapter plasmoVoiceAdapter;
     private PaperSimpleVoiceChatAdapter simpleVoiceChatAdapter;
@@ -94,6 +96,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         reloadConfig();
         voiceCraftProcessManager = new VoiceCraftProcessManager(this);
         sessionManager = new PaperVoiceCraftSessionManager(this);
+        voiceStatusOverlay = new PlayerVoiceStatusOverlay(this);
         plasmoVoiceAdapter = new PaperPlasmoVoiceAdapter(this);
         simpleVoiceChatAdapter = new PaperSimpleVoiceChatAdapter(this);
 
@@ -109,12 +112,16 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         positionsTask = new PositionsTask(this, lang);
         taskRunner = positionsTask.runTaskTimer(this, 1, positionTaskInterval);
         getServer().getPluginManager().registerEvents(new PlayerQuitHandler(this, lang), this);
+        voiceStatusOverlay.start();
 
         this.reload();
     }
 
     @Override
     public void onDisable() {
+        if (voiceStatusOverlay != null) {
+            voiceStatusOverlay.stop();
+        }
         stopPlasmoAdapter();
         stopSimpleVoiceChatAdapter();
         disconnect("Plugin disabled");
@@ -201,6 +208,9 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             taskRunner.cancel();
         positionsTask = new PositionsTask(this, lang);
         taskRunner = positionsTask.runTaskTimer(this, 1, positionTaskInterval);
+        if (voiceStatusOverlay != null) {
+            voiceStatusOverlay.reload();
+        }
 
         reloadPlasmoAdapter();
         reloadSimpleVoiceChatAdapter();

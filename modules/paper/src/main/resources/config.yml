@@ -1,4 +1,4 @@
-config-version: 6 # DO NOT EDIT: used for automatic config migrations
+config-version: 7 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false
@@ -45,6 +45,26 @@ config:
     proximity-distance: 30
     proximity-toggle: true
     voice-effects: true
+
+    vanilla-status-overlay:
+      enabled: true
+      update-interval-ticks: 5
+      handshake-grace-ticks: 60
+      speaking-hold-ms: 600
+      height-offset: 2.55
+      view-distance: 48
+      symbols:
+        disconnected: "×"
+        connected: "○"
+        speaking: "●"
+        muted: "M"
+        deafened: "D"
+      colors:
+        disconnected: "dark_gray"
+        connected: "gray"
+        speaking: "green"
+        muted: "red"
+        deafened: "yellow"
 
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost

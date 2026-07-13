@@ -158,6 +158,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         plugin.Logger.infoLocalized("adapter.listening", "$adapter", "Simple Voice Chat", "$bindHost", bindHost,
                 "$bindPort", Integer.toString(udpPort), "$publicHost",
                 voiceHost.isBlank() ? "<minecraft host>" : voiceHost, "$publicPort", Integer.toString(publicPort));
+        bootstrapOnlinePlayers();
     }
 
     @Override
@@ -329,6 +330,12 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         sendSecret(player, session);
         debugLocalized("adapter-debug.secret-sent", "$adapter", "Simple Voice Chat", "$player", player.getName(),
                 "$entity", Integer.toString(entityId.getAsInt()));
+    }
+
+    private void bootstrapOnlinePlayers() {
+        runPluginTask(() -> plugin.getServer().getOnlinePlayers().stream()
+                .filter(player -> player.getListeningPluginChannels().contains(SimpleVoiceChatChannels.REQUEST_SECRET))
+                .forEach(this::handleRequestSecret));
     }
 
     private void registerProxyUdpRoute(Player player, SimpleVoiceChatClientSession session) {

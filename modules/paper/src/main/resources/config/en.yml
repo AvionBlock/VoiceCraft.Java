@@ -1,4 +1,4 @@
-config-version: 5 # DO NOT EDIT: used for automatic config migrations
+config-version: 6 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false                   # Enable additional debug logging
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0"       # UDP bind address for Plasmo clients
       port: 24454                # UDP port for Plasmo clients
       public:
-        host: ""                 # Empty uses the Minecraft connection host; set the proxy host behind Velocity/Bungee
+        host: "0.0.0.0"          # Plasmo uses the Minecraft connection host for 0.0.0.0; set the proxy host behind Velocity/Bungee
         port: 0                  # Port sent to Plasmo clients; 0 uses the UDP port above, or set proxy relay port
     simple-voice-chat:
       enabled: false             # Enable Simple Voice Chat client compatibility

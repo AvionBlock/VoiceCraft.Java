@@ -1,4 +1,4 @@
-config-version: 5 # 編集しないでください: configの自動移行に使用されます
+config-version: 6 # 編集しないでください: configの自動移行に使用されます
 
 config:
   debug: false # 追加のデバッグログを有効化します
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0" # Plasmoクライアント用UDPバインドアドレス
       port: 24454 # Plasmoクライアント用UDPポート
       public:
-        host: "" # 空の場合は Minecraft 接続先を使用。Velocity/Bungee 配下では proxy host を指定
+        host: "0.0.0.0" # Plasmo は 0.0.0.0 の場合 Minecraft 接続先を使用。Velocity/Bungee 配下では proxy host を指定
         port: 0 # Plasmo clients に送信する port; 0 は上の UDP port、または proxy relay port を設定
     simple-voice-chat:
       enabled: false # Simple Voice Chatクライアント互換を有効化

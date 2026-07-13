@@ -134,6 +134,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
      */
     public synchronized void disconnect() {
         stopAudioWorker();
+        destroyManagedEntities();
         client.logout();
         clearSessionState();
     }
@@ -211,7 +212,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                     initializeCreatedEntity(created.Id, player);
                     boundEntitiesByPlayerName.put(player.getName(), new BoundEntity(player.getName(), created.Id,
                             player.getUniqueId().toString(), player.getUniqueId().toString(), "java",
-                            getDimensionId(player), getCurrentEffectBitmask()));
+                            getDimensionId(player), getCurrentEffectBitmask(), false));
                     plugin.getPlayerBinds().put(player.getName(), true);
                     return OptionalInt.of(created.Id);
                 }
@@ -243,8 +244,14 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
      */
     public synchronized void destroyEntityForPlayer(String playerName) {
         BoundEntity boundEntity = boundEntitiesByPlayerName.remove(playerName);
-        if (boundEntity == null || !client.isConnected()) {
+        if (boundEntity == null) {
             plugin.getPlayerBinds().remove(playerName);
+            return;
+        }
+
+        unregisterEntityIdentity(boundEntity.entityId());
+        plugin.getPlayerBinds().remove(playerName);
+        if (!client.isConnected()) {
             return;
         }
 
@@ -252,7 +259,6 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         packet.RequestId = java.util.UUID.randomUUID().toString();
         packet.Id = boundEntity.entityId();
         processPackets(client.exchange(List.of(packet)));
-        plugin.getPlayerBinds().remove(playerName);
     }
 
     @Override
@@ -420,11 +426,17 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
             return false;
         }
 
-        PendingEntity pendingEntity = new PendingEntity(boundEntity.entityId(), boundEntity.userGuid(),
-                boundEntity.serverUserGuid(), boundEntity.locale());
-        assignBindingKey(pendingEntity);
+        unregisterEntityIdentity(boundEntity.entityId());
         plugin.getPlayerBinds().remove(player.getName());
-        return true;
+        if (!client.isConnected()) {
+            return false;
+        }
+
+        DestroyEntityRequestPacket packet = new DestroyEntityRequestPacket();
+        packet.RequestId = java.util.UUID.randomUUID().toString();
+        packet.Id = boundEntity.entityId();
+        processPackets(client.exchange(List.of(packet)));
+        return client.isConnected();
     }
 
     private void applyGlobalSettings() {
@@ -599,7 +611,9 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
         boundEntitiesByPlayerName.put(player.getName(), new BoundEntity(player.getName(), pendingEntity.entityId(),
                 pendingEntity.userGuid(), pendingEntity.serverUserGuid(), pendingEntity.locale(), getDimensionId(player),
-                getCurrentEffectBitmask()));
+                getCurrentEffectBitmask(), true));
+        registerEntityIdentity(new VoiceCraftEntityIdentity(pendingEntity.entityId(), player.getUniqueId(),
+                player.getName(), "voicecraft"));
         plugin.getPlayerBinds().put(player.getName(), true);
         return true;
     }
@@ -628,7 +642,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
         boundEntitiesByPlayerName.put(name, new BoundEntity(name, pendingEntity.entityId(),
                 pendingEntity.userGuid(), pendingEntity.serverUserGuid(), pendingEntity.locale(), "",
-                getCurrentEffectBitmask()));
+                getCurrentEffectBitmask(), true));
         plugin.getPlayerBinds().put(name, true);
         return true;
     }
@@ -692,6 +706,26 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         entityIdentitiesById.clear();
         identities.forEach(this::notifyIdentityUnregistered);
         plugin.getPlayerBinds().clear();
+    }
+
+    private void destroyManagedEntities() {
+        if (!client.isConnected()) {
+            return;
+        }
+
+        List<McApiPacket> packets = new ArrayList<>();
+        for (BoundEntity boundEntity : boundEntitiesByPlayerName.values()) {
+            if (boundEntity.networkEntity()) {
+                continue;
+            }
+            DestroyEntityRequestPacket packet = new DestroyEntityRequestPacket();
+            packet.RequestId = java.util.UUID.randomUUID().toString();
+            packet.Id = boundEntity.entityId();
+            packets.add(packet);
+        }
+        if (!packets.isEmpty()) {
+            processPackets(client.exchange(packets));
+        }
     }
 
     private void notifyIdentityRegistered(VoiceCraftEntityIdentity identity) {
@@ -807,9 +841,10 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         private final String locale;
         private String worldId;
         private int effectBitmask;
+        private final boolean networkEntity;
 
         private BoundEntity(String playerName, int entityId, String userGuid, String serverUserGuid, String locale,
-                String worldId, int effectBitmask) {
+                String worldId, int effectBitmask, boolean networkEntity) {
             this.playerName = playerName;
             this.entityId = entityId;
             this.userGuid = userGuid;
@@ -817,6 +852,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
             this.locale = locale;
             this.worldId = worldId;
             this.effectBitmask = effectBitmask;
+            this.networkEntity = networkEntity;
         }
 
         private String playerName() {
@@ -845,6 +881,10 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
         private int effectBitmask() {
             return effectBitmask;
+        }
+
+        private boolean networkEntity() {
+            return networkEntity;
         }
     }
 }

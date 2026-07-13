@@ -1,4 +1,4 @@
-config-version: 5 # DO NOT EDIT: used for automatic config migrations
+config-version: 6 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0"
       port: 24454
       public:
-        host: ""
+        host: "0.0.0.0"
         port: 0
     simple-voice-chat:
       enabled: false

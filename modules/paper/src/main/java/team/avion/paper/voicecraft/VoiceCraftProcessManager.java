@@ -74,7 +74,9 @@ public class VoiceCraftProcessManager {
                     ensureRunningBlocking();
                 } finally {
                     starting.set(false);
-                    scheduleReconnectAfterStartup();
+                    if (!plugin.isConnected()) {
+                        scheduleReconnectAfterStartup();
+                    }
                 }
             });
         } catch (RejectedExecutionException exception) {

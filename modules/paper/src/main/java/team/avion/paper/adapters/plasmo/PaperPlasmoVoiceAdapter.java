@@ -131,6 +131,9 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         this.udpPort = plugin.getConfig().getInt("config.adapters.plasmo.port", 24454);
         this.publicHost = plugin.getConfig().getString("config.adapters.plasmo.public.host",
                 plugin.getConfig().getString("config.adapters.plasmo.advertised-host", ""));
+        if (publicHost == null || publicHost.isBlank()) {
+            publicHost = "0.0.0.0";
+        }
         int configuredPublicPort = plugin.getConfig().getInt("config.adapters.plasmo.public.port", 0);
         this.publicPort = configuredPublicPort > 0 ? configuredPublicPort : udpPort;
         this.proximityDistance = plugin.getConfig().getInt("config.voice.proximity-distance", 30);
@@ -152,7 +155,8 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         state = AdapterState.RUNNING;
         plugin.Logger.infoLocalized("adapter.listening", "$adapter", "Plasmo Voice", "$bindHost", bindHost,
                 "$bindPort", Integer.toString(udpPort), "$publicHost",
-                publicHost.isBlank() ? "<minecraft host>" : publicHost, "$publicPort", Integer.toString(publicPort));
+                publicHost, "$publicPort", Integer.toString(publicPort));
+        bootstrapOnlinePlayers();
     }
 
     @Override
@@ -361,6 +365,12 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             return;
         }
         sendTcpPacket(player, new PlayerInfoRequestPacket());
+    }
+
+    private void bootstrapOnlinePlayers() {
+        runPluginTask(() -> plugin.getServer().getOnlinePlayers().stream()
+                .filter(player -> player.getListeningPluginChannels().contains(PlasmoChannels.MAIN))
+                .forEach(this::requestPlayerInfo));
     }
 
     private void handlePlayerInfo(Player player, PlayerInfoPacket packet) {

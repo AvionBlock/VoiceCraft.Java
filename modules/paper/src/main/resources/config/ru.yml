@@ -1,4 +1,4 @@
-config-version: 5 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
+config-version: 6 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
 
 config:
   debug: false # Включить дополнительное логирование
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0" # UDP-адрес для Plasmo-клиентов
       port: 24454 # UDP-порт для Plasmo-клиентов
       public:
-        host: "" # Пустое значение использует Minecraft-хост; за Velocity/Bungee укажите хост прокси
+        host: "0.0.0.0" # Plasmo использует Minecraft-хост при 0.0.0.0; за Velocity/Bungee укажите хост прокси
         port: 0 # Порт для Plasmo клиентов; 0 использует UDP-порт выше, либо укажите proxy relay port
     simple-voice-chat:
       enabled: false # Включить совместимость с клиентом Simple Voice Chat

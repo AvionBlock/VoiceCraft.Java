@@ -1,4 +1,4 @@
-config-version: 5 # NIET AANPASSEN: gebruikt voor automatische configmigraties
+config-version: 6 # NIET AANPASSEN: gebruikt voor automatische configmigraties
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0" # UDP-bindadres voor Plasmo-clients
       port: 24454 # UDP-poort voor Plasmo-clients
       public:
-        host: "" # Leeg gebruikt de Minecraft-host; gebruik de proxy-host achter Velocity/Bungee
+        host: "0.0.0.0" # Plasmo gebruikt bij 0.0.0.0 de Minecraft-host; gebruik de proxy-host achter Velocity/Bungee
         port: 0 # Poort voor Plasmo clients; 0 gebruikt de UDP-poort hierboven, of zet proxy relay-poort
     simple-voice-chat:
       enabled: false # Simple Voice Chat-clientcompatibiliteit inschakelen

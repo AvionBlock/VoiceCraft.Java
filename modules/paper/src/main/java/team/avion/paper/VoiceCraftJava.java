@@ -37,7 +37,8 @@ import java.util.Map;
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 5;
+    private static final int CURRENT_CONFIG_VERSION = 6;
+    private static final String PLASMO_PUBLIC_HOST_PATH = "config.adapters.plasmo.public.host";
     private static final String[] REMOVED_VOICE_UI_PATHS = {
             "config.voice.status-icons",
             "config.voice.not-in-voice-symbol",
@@ -72,6 +73,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private @Getter PositionsTask positionsTask;
     private PaperPlasmoVoiceAdapter plasmoVoiceAdapter;
     private PaperSimpleVoiceChatAdapter simpleVoiceChatAdapter;
+    private volatile boolean reloadInProgress;
 
     private BukkitTask taskRunner;
 
@@ -130,6 +132,15 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
      * Reloads the plugin configuration and initializes connections.
      */
     public void reload() {
+        reloadInProgress = true;
+        try {
+            reloadInternal();
+        } finally {
+            reloadInProgress = false;
+        }
+    }
+
+    private void reloadInternal() {
         ensureLocalizedConfigExists();
         reloadConfig();
         if (!migrateConfigIfNeeded()) {
@@ -142,14 +153,23 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         Logger.info(Language.getMessage(lang, "plugin-command-executor"));
 
         boolean newUsesProxy = getConfig().getBoolean("config.proxy.enabled", false);
-        if (sessionManager.isConnected() && usesProxy != newUsesProxy) {
+        String newHost = getTransportHost();
+        int newPort = getTransportPort();
+        String newLoginToken = getTransportLoginToken();
+        boolean connectionChanged = usesProxy != newUsesProxy
+                || !Objects.equals(host, newHost)
+                || port != newPort
+                || !Objects.equals(loginToken, newLoginToken);
+        if (sessionManager.isConnected() && connectionChanged) {
             sessionManager.disconnect();
+            isConnected = false;
+            token = "";
         }
         usesProxy = newUsesProxy;
 
-        host = getTransportHost();
-        port = getTransportPort();
-        loginToken = getTransportLoginToken();
+        host = newHost;
+        port = newPort;
+        loginToken = newLoginToken;
         int proximityDistance = getConfig().getInt("config.voice.proximity-distance");
         boolean proximityToggle = getConfig().getBoolean("config.voice.proximity-toggle");
         boolean voiceEffects = getConfig().getBoolean("config.voice.voice-effects");
@@ -162,6 +182,10 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         if (usesProxy) {
             isConnected = true;
             token = "proxy";
+        } else if (!connectionChanged && sessionManager.isConnected()) {
+            isConnected = true;
+            token = sessionManager.getSessionToken();
+            sessionManager.updateSettings(proximityDistance, proximityToggle, voiceEffects);
         } else if (voiceCraftProcessManager != null && voiceCraftProcessManager.isStarting()) {
             isConnected = false;
             token = "";
@@ -212,7 +236,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
      * @param force Indicates whether to force a connection.
      * @return True if connected successfully, otherwise false.
      */
-    public Boolean reconnect(Boolean force) {
+    public synchronized Boolean reconnect(Boolean force) {
         if (isConnected && !force)
             return true;
         if (isConnected) {
@@ -236,7 +260,12 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
                 Logger.info(Language.getMessage(lang, "plugin-connect-connected"));
                 isConnected = true;
                 token = Token;
+                if (!reloadInProgress) {
+                    scheduleAdapterReload();
+                }
             } else {
+                isConnected = false;
+                token = "";
                 Logger.warn(Language.getMessage(lang, "plugin-connect-failed"));
             }
             return isConnected;
@@ -462,6 +491,10 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             for (String removedPath : REMOVED_VOICE_UI_PATHS) {
                 userConfig.set(removedPath, null);
             }
+            String plasmoPublicHost = userConfig.getString(PLASMO_PUBLIC_HOST_PATH, "");
+            if (plasmoPublicHost.isBlank()) {
+                userConfig.set(PLASMO_PUBLIC_HOST_PATH, "0.0.0.0");
+            }
             userConfig.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             userConfig.save(configFile);
             Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",
@@ -531,6 +564,23 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             simpleVoiceChatAdapter.start(new AdapterContext(Logger, getDataFolder().toPath(), sessionManager));
         } catch (Exception exception) {
             Logger.errorLocalized("adapter.svc-start-failed", "$error", exception.getMessage());
+        }
+    }
+
+    private void scheduleAdapterReload() {
+        if (!isEnabled()) {
+            return;
+        }
+        try {
+            getServer().getScheduler().runTask(this, () -> {
+                if (!isEnabled() || !isConnected) {
+                    return;
+                }
+                reloadPlasmoAdapter();
+                reloadSimpleVoiceChatAdapter();
+            });
+        } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
+            // Plugin shutdown raced with reconnect completion.
         }
     }
 

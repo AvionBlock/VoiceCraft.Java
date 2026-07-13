@@ -32,14 +32,13 @@ import java.io.InputStream;
 import java.util.UUID;
 import java.util.Objects;
 import java.util.Map;
-import java.util.HashMap;
 
 /**
  * Main plugin class for VoiceCraft.Java.
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final int CURRENT_CONFIG_VERSION = 4;
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
     private static final String TRANSPORT_LOGIN_TOKEN_PATH = "config.voicecraft.transport.login-token";
@@ -49,14 +48,14 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String MANAGED_VOICE_PORT_PATH = "config.voicecraft.voice.port";
 
     private static @Getter VoiceCraftJava instance;
-    private @Getter boolean isConnected = false;
-    private @Getter String host = "";
-    private @Getter int port = 0;
-    private @Getter String loginToken = "";
-    private @Getter Map<String, Boolean> playerBinds = new HashMap<>();
-    private @Getter String token = "";
+    private @Getter volatile boolean isConnected = false;
+    private @Getter volatile String host = "";
+    private @Getter volatile int port = 0;
+    private @Getter volatile String loginToken = "";
+    private @Getter Map<String, Boolean> playerBinds = new java.util.concurrent.ConcurrentHashMap<>();
+    private @Getter volatile String token = "";
     private String lang;
-    public boolean usesProxy = false;
+    public volatile boolean usesProxy = false;
     private final @Getter PluginMessageHandler messageHandler = new PluginMessageHandler(this);
     private @Getter VoiceCraftProcessManager voiceCraftProcessManager;
     private @Getter PaperVoiceCraftSessionManager sessionManager;
@@ -160,6 +159,9 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         if (usesProxy) {
             isConnected = true;
             token = "proxy";
+        } else if (voiceCraftProcessManager != null && voiceCraftProcessManager.isStarting()) {
+            isConnected = false;
+            token = "";
         } else if (getConfig().getBoolean("config.auto-reconnect")) {
             isConnected = reconnect(true);
         } else {
@@ -176,7 +178,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             voiceStatusOverlay.reload();
         }
 
-        updateSettings(proximityDistance, proximityToggle, voiceEffects);
         reloadPlasmoAdapter();
         reloadSimpleVoiceChatAdapter();
     }
@@ -198,7 +199,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             reloadConfig();
             reload();
 
-            return isConnected;
+            return isConnected || (voiceCraftProcessManager != null && voiceCraftProcessManager.isStarting());
         } else {
             Logger.warn(Language.getMessage(lang, "plugin-connect-invalid-data"));
             return false;

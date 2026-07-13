@@ -1,4 +1,4 @@
-﻿config-version: 3 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
+config-version: 4 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
 
 config:
   debug: false # Включить дополнительное логирование
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0" # UDP-адрес для Plasmo-клиентов
       port: 24454 # UDP-порт для Plasmo-клиентов
       public:
-        host: "0.0.0.0" # Хост для Plasmo клиентов; за Velocity/Bungee укажите хост прокси
+        host: "" # Пустое значение использует Minecraft-хост; за Velocity/Bungee укажите хост прокси
         port: 0 # Порт для Plasmo клиентов; 0 использует UDP-порт выше, либо укажите proxy relay port
     simple-voice-chat:
       enabled: false # Включить совместимость с клиентом Simple Voice Chat
@@ -64,3 +64,5 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Интервал обновления позиций в тиках
+    cave-scan-interval-ms: 1000 # Минимальный интервал пересчета cave-фактора одного игрока
+    cave-scans-per-update: 2 # Максимум тяжелых cave-сканирований за одно обновление позиций

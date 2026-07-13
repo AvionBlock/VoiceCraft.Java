@@ -37,6 +37,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -177,6 +178,14 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
             context.audioBridge().unregisterIdentityListener(this);
         }
 
+        if (sessions != null) {
+            boolean destroyEntities = plugin.isEnabled()
+                    && !plugin.getConfig().getBoolean("config.adapters.simple-voice-chat.enabled", false);
+            for (SimpleVoiceChatClientSession session : List.copyOf(sessions.sessions())) {
+                cleanupSession(session, pluginMessageCarrier(session.playerId()), destroyEntities);
+            }
+        }
+
         if (udpSocket != null) {
             udpSocket.close();
         }
@@ -277,10 +286,8 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (sessions.byPlayerId(event.getPlayer().getUniqueId()).isPresent()) {
             SimpleVoiceChatClientSession session = sessions.byPlayerId(event.getPlayer().getUniqueId()).orElse(null);
-            sessions.remove(event.getPlayer().getUniqueId());
             if (session != null) {
-                unregisterProxyUdpRoute(event.getPlayer(), session);
-                context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
+                cleanupSession(session, event.getPlayer(), false);
             }
             plugin.getSessionManager().destroyEntityForPlayer(event.getPlayer().getName());
         }
@@ -367,11 +374,14 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         if (!sentStates.add(key)) {
             return;
         }
-        Player player = plugin.getServer().getPlayer(receiver.playerId());
-        if (player == null || !player.isOnline()) {
-            return;
-        }
-        sendState(player, identity);
+        runPluginTask(() -> {
+            Player player = plugin.getServer().getPlayer(receiver.playerId());
+            if (player == null || !player.isOnline()) {
+                sentStates.remove(key);
+                return;
+            }
+            sendState(player, identity);
+        });
     }
 
     private void broadcastState(VoiceCraftEntityIdentity identity) {
@@ -472,7 +482,6 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         }
 
         SimpleVoiceChatClientSession session = optionalSession.get();
-        session.touch(remoteAddress);
         if (envelope.packet() instanceof AuthenticatePacket authenticatePacket) {
             debug("Decoded Simple Voice Chat UDP packet " + envelope.packet().type()
                     + " from " + session.playerName() + " at " + remoteAddress + ".");
@@ -484,23 +493,38 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
                 debug("Ignored Simple Voice Chat auth with mismatched secret from " + session.playerName() + ".");
                 return;
             }
+            session.touch(remoteAddress);
+            session.markAuthenticated();
             sendUdpPacket(new SimplePacket(SimpleVoiceChatPacketType.AUTHENTICATE_ACK), session);
             debug("Authenticated Simple Voice Chat UDP session for " + session.playerName() + ".");
         } else if (envelope.packet() instanceof SimplePacket simplePacket
                 && simplePacket.type() == SimpleVoiceChatPacketType.CONNECTION_CHECK) {
+            if (!session.authenticated() || !remoteAddress.equals(session.remoteAddress())) {
+                debug("Ignored Simple Voice Chat connection check before authentication for "
+                        + session.playerName() + ".");
+                return;
+            }
+            session.touch(remoteAddress);
             debug("Decoded Simple Voice Chat UDP packet " + envelope.packet().type()
                     + " from " + session.playerName() + " at " + remoteAddress + ".");
             session.markConnected();
             sendUdpPacket(new SimplePacket(SimpleVoiceChatPacketType.CONNECTION_CHECK_ACK), session);
-            Player player = plugin.getServer().getPlayer(session.playerId());
-            if (player != null && player.isOnline()) {
-                runPluginTask(() -> sendInitialStates(player));
-            }
+            runPluginTask(() -> {
+                Player player = plugin.getServer().getPlayer(session.playerId());
+                if (player != null && player.isOnline()) {
+                    sendInitialStates(player);
+                }
+            });
             debug("Validated Simple Voice Chat UDP session for " + session.playerName() + ".");
+        } else if (!session.connected() || !remoteAddress.equals(session.remoteAddress())) {
+            debug("Ignored Simple Voice Chat UDP packet before connection validation for "
+                    + session.playerName() + ".");
         } else if (envelope.packet() instanceof SimplePacket simplePacket
                 && simplePacket.type() == SimpleVoiceChatPacketType.KEEP_ALIVE) {
+            session.touch(remoteAddress);
             debug("Received Simple Voice Chat keepalive from " + session.playerName() + ".");
         } else if (envelope.packet() instanceof MicPacket micPacket) {
+            session.touch(remoteAddress);
             debugReceivedAudio(micPacket.data().length);
             sessions.forwardAudio(session, micPacket);
         }
@@ -514,7 +538,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
             }
             if (now - session.lastSeenMillis() >= keepAliveMillis * KEEP_ALIVE_TIMEOUT_FACTOR) {
                 debug("Simple Voice Chat UDP session timed out for " + session.playerName() + ".");
-                sessions.remove(session.playerId());
+                cleanupExpiredSession(session);
                 continue;
             }
             if (now - session.lastKeepAliveSentMillis() < keepAliveMillis) {
@@ -536,6 +560,67 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         DatagramPacket datagram = new DatagramPacket(encoded, encoded.length);
         datagram.setSocketAddress(session.remoteAddress());
         udpSocket.send(datagram);
+    }
+
+    private void cleanupExpiredSession(SimpleVoiceChatClientSession session) {
+        sessions.remove(session.playerId());
+        context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
+        plugin.getSessionManager().destroyEntityForPlayer(session.playerName());
+        runPluginTask(() -> unregisterProxyUdpRoute(pluginMessageCarrier(session.playerId()), session));
+    }
+
+    private void cleanupSession(SimpleVoiceChatClientSession session, Player carrier, boolean destroyEntity) {
+        sessions.remove(session.playerId());
+        unregisterProxyUdpRoute(carrier, session);
+        context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
+        if (destroyEntity) {
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin,
+                    () -> plugin.getSessionManager().destroyEntityForPlayer(session.playerName()));
+        }
+    }
+
+    @Override
+    public void receiveEntityAudioEnd(int entityId, long sequenceNumber) {
+        if (!running.get()) {
+            return;
+        }
+
+        Optional<SimpleVoiceChatClientSession> sourceSession = sessions.byEntityId(entityId);
+        VoiceCraftEntityIdentity sourceIdentity = context.audioBridge().entityIdentity(entityId)
+                .orElseGet(() -> sourceSession
+                        .map(session -> new VoiceCraftEntityIdentity(entityId, session.playerId(), session.playerName(), id()))
+                        .orElseGet(() -> new VoiceCraftEntityIdentity(entityId, syntheticSourceId(entityId),
+                                "VoiceCraft-" + entityId, "voicecraft")));
+        UUID sourceId = sourceIdentity.playerId();
+        PlayerSoundPacket packet = new PlayerSoundPacket(
+                sourceId,
+                sourceId,
+                new byte[0],
+                sequenceNumber & 0xFFFFL,
+                false,
+                (float) voiceDistance
+        );
+
+        for (SimpleVoiceChatClientSession receiver : sessions.sessions()) {
+            if (!receiver.connected() || receiver.remoteAddress() == null
+                    || sourceSession.map(source -> receiver.playerId().equals(source.playerId())).orElse(false)) {
+                continue;
+            }
+            try {
+                sendUdpPacket(packet, receiver);
+            } catch (Exception exception) {
+                plugin.Logger.warn("Failed to finish Simple Voice Chat audio for " + receiver.playerName()
+                        + ": " + exception.getMessage());
+            }
+        }
+    }
+
+    private Player pluginMessageCarrier(UUID preferredPlayerId) {
+        Player preferred = plugin.getServer().getPlayer(preferredPlayerId);
+        if (preferred != null && preferred.isOnline()) {
+            return preferred;
+        }
+        return plugin.getServer().getOnlinePlayers().stream().findFirst().orElse(null);
     }
 
     private void runPluginTask(Runnable task) {

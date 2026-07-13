@@ -8,10 +8,10 @@ public final class PlasmoClientSession {
     private final String playerName;
     private final int voiceCraftEntityId;
     private final UUID udpSecret;
-    private SocketAddress remoteAddress;
-    private long lastSeenMillis;
-    private long lastKeepAliveSentMillis;
-    private boolean configSent;
+    private volatile SocketAddress remoteAddress;
+    private volatile long lastSeenMillis;
+    private volatile long lastKeepAliveSentMillis;
+    private volatile boolean configSent;
 
     public PlasmoClientSession(UUID playerId, String playerName, int voiceCraftEntityId, UUID udpSecret) {
         this.playerId = playerId;

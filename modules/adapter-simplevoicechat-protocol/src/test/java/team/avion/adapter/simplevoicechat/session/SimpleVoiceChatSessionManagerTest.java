@@ -16,6 +16,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimpleVoiceChatSessionManagerTest {
     @Test
+    void replacingSessionRemovesOldEntityLookup() {
+        TestAudioBridge bridge = new TestAudioBridge();
+        SimpleVoiceChatSessionManager manager = new SimpleVoiceChatSessionManager(bridge);
+        UUID playerId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        try {
+            manager.createOrReplace(playerId, "Player", 41);
+            SimpleVoiceChatClientSession replacement = manager.createOrReplace(playerId, "Player", 42);
+
+            assertTrue(manager.byEntityId(41).isEmpty());
+            assertEquals(replacement, manager.byEntityId(42).orElseThrow());
+            assertEquals(replacement, manager.byPlayerId(playerId).orElseThrow());
+        } finally {
+            manager.close();
+        }
+    }
+
+    @Test
     void emptyMicSchedulesAudioEndAfterDelayAndReportsMetrics() throws Exception {
         TestAudioBridge bridge = new TestAudioBridge();
         TestAudioEndMetrics metrics = new TestAudioEndMetrics();

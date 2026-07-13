@@ -22,6 +22,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -36,27 +41,60 @@ import team.avion.protocol.VoiceCraftProtocol;
 import team.avion.protocol.VoiceCraftRuntimeDefaults;
 
 public class VoiceCraftProcessManager {
-    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
     private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final VoiceCraftJava plugin;
+    private final ExecutorService launcherExecutor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "VoiceCraft.Java-Runtime-Launcher");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicBoolean starting = new AtomicBoolean(false);
 
     private Process process;
     private Thread stdoutLogPump;
     private Thread stderrLogPump;
+    private volatile Future<?> ensureFuture;
+    private volatile boolean closed;
 
     public VoiceCraftProcessManager(VoiceCraftJava plugin) {
         this.plugin = plugin;
     }
 
-    public synchronized void ensureRunning() {
+    public void ensureRunning() {
         if (!plugin.getConfig().getBoolean("config.voicecraft.auto-start", true)) {
             return;
         }
         if (plugin.usesProxy) {
             return;
         }
+        if (closed || !starting.compareAndSet(false, true)) {
+            return;
+        }
 
+        try {
+            ensureFuture = launcherExecutor.submit(() -> {
+                try {
+                    ensureRunningBlocking();
+                } finally {
+                    starting.set(false);
+                    scheduleReconnectAfterStartup();
+                }
+            });
+        } catch (RejectedExecutionException exception) {
+            starting.set(false);
+        }
+    }
+
+    public boolean isStarting() {
+        return starting.get();
+    }
+
+    private synchronized void ensureRunningBlocking() {
         LaunchTarget launchTarget = null;
         try {
             launchTarget = resolveReleaseLaunchTarget();
@@ -100,17 +138,47 @@ public class VoiceCraftProcessManager {
         }
     }
 
-    public synchronized void shutdown() {
-        if (process == null) {
+    public void shutdown() {
+        closed = true;
+        Future<?> pendingEnsure = ensureFuture;
+        if (pendingEnsure != null) {
+            pendingEnsure.cancel(true);
+        }
+        launcherExecutor.shutdownNow();
+
+        synchronized (this) {
+            if (process == null) {
+                return;
+            }
+
+            if (plugin.getConfig().getBoolean("config.voicecraft.shutdown-on-disable", true)) {
+                plugin.Logger.info("Stopping managed VoiceCraft process...");
+                stopProcess();
+            }
+
+            process = null;
+        }
+    }
+
+    private void scheduleReconnectAfterStartup() {
+        if (closed || !plugin.isEnabled()) {
             return;
         }
-
-        if (plugin.getConfig().getBoolean("config.voicecraft.shutdown-on-disable", true)) {
-            plugin.Logger.info("Stopping managed VoiceCraft process...");
-            stopProcess();
+        try {
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                if (!closed && !plugin.usesProxy
+                        && plugin.getConfig().getBoolean("config.auto-reconnect", true)) {
+                    try {
+                        plugin.reconnect(true);
+                    } catch (Exception exception) {
+                        plugin.Logger.warn("VoiceCraft reconnect after managed startup failed: "
+                                + exception.getMessage());
+                    }
+                }
+            });
+        } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
+            // Plugin shutdown raced with launcher completion.
         }
-
-        process = null;
     }
 
     private void startManagedProcess(LaunchTarget launchTarget) throws IOException {
@@ -401,7 +469,11 @@ public class VoiceCraftProcessManager {
                 VoiceCraftRuntimeDefaults.RELEASE, assetName);
 
         plugin.Logger.info("Downloading VoiceCraft release asset " + assetName + "...");
-        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(downloadUrl)).GET().build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(downloadUrl))
+                .timeout(Duration.ofSeconds(30))
+                .GET()
+                .build();
         HttpResponse<InputStream> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() != 200) {
             throw new IOException("Unexpected HTTP status " + response.statusCode() + " while downloading " + downloadUrl);

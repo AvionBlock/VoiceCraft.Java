@@ -1,4 +1,4 @@
-﻿config-version: 3 # NIET AANPASSEN: gebruikt voor automatische configmigraties
+config-version: 4 # NIET AANPASSEN: gebruikt voor automatische configmigraties
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0" # UDP-bindadres voor Plasmo-clients
       port: 24454 # UDP-poort voor Plasmo-clients
       public:
-        host: "0.0.0.0" # Host voor Plasmo clients; gebruik de proxy host achter Velocity/Bungee
+        host: "" # Leeg gebruikt de Minecraft-host; gebruik de proxy-host achter Velocity/Bungee
         port: 0 # Poort voor Plasmo clients; 0 gebruikt de UDP-poort hierboven, of zet proxy relay-poort
     simple-voice-chat:
       enabled: false # Simple Voice Chat-clientcompatibiliteit inschakelen
@@ -64,3 +64,5 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Positie-update-interval in ticks
+    cave-scan-interval-ms: 1000 # Minimale tijd voor een nieuwe grotmeting per speler
+    cave-scans-per-update: 2 # Maximum aantal zware grotmetingen per positie-update

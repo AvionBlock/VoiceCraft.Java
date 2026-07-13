@@ -10,10 +10,11 @@ public final class SimpleVoiceChatClientSession {
     private final String playerName;
     private final int voiceCraftEntityId;
     private final SimpleVoiceChatSecret secret;
-    private SocketAddress remoteAddress;
-    private long lastSeenMillis;
-    private long lastKeepAliveSentMillis;
-    private boolean connected;
+    private volatile SocketAddress remoteAddress;
+    private volatile long lastSeenMillis;
+    private volatile long lastKeepAliveSentMillis;
+    private volatile boolean authenticated;
+    private volatile boolean connected;
 
     public SimpleVoiceChatClientSession(UUID playerId, String playerName, int voiceCraftEntityId, SimpleVoiceChatSecret secret) {
         this.playerId = playerId;
@@ -53,6 +54,15 @@ public final class SimpleVoiceChatClientSession {
 
     public boolean connected() {
         return connected;
+    }
+
+    public boolean authenticated() {
+        return authenticated;
+    }
+
+    public void markAuthenticated() {
+        authenticated = true;
+        connected = false;
     }
 
     public void markConnected() {

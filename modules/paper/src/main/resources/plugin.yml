@@ -1,6 +1,6 @@
 name: VoiceCraft.Java
 
-version: 0.1.0-SNAPSHOT
+version: ${version}
 
 main: team.avion.paper.VoiceCraftJava
 description: Java-side VoiceCraft bridge with Paper adapters, proxy networking, and managed runtime support.

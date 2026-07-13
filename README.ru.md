@@ -247,7 +247,7 @@ config:
       bind-host: "0.0.0.0"
       port: 24454
       public:
-        host: "0.0.0.0"
+        host: ""
         port: 0
 ```
 

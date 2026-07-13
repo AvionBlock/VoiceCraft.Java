@@ -1,5 +1,7 @@
 package team.avion.bungeecord.listeners;
 
+import java.net.InetSocketAddress;
+
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.connection.Server;
 import net.md_5.bungee.api.config.ServerInfo;
@@ -40,14 +42,12 @@ public class PluginMessageHandler implements Listener {
             return;
         }
 
-        String serverName;
-        if (event.getSender() instanceof Server backend) {
-            serverName = backend.getInfo().getName();
-        } else if (event.getSender() instanceof ProxiedPlayer player) {
-            serverName = player.getServer().getInfo().getName();
-        } else {
+        if (!(event.getSender() instanceof Server backend)) {
+            plugin.Logger.warn("Ignoring " + CHANNEL + " plugin message from a non-backend connection.");
+            event.setCancelled(true);
             return;
         }
+        String serverName = backend.getInfo().getName();
 
         byte[] data = event.getData();
         try {
@@ -65,11 +65,15 @@ public class PluginMessageHandler implements Listener {
                 sendBindSync(unbindRequest.playerName(), false);
             } else if (ProxyMessageCodec.UDP_ROUTE_REGISTER.equals(type)) {
                 ProxyMessageCodec.UdpRouteRegister route = ProxyMessageCodec.decodeUdpRouteRegister(data);
-                String backendHost = backendHost(event);
-                if (backendHost != null) {
-                    plugin.getUdpRelayManager().registerRoute(route.adapterId(), route.routeKey(), backendHost,
-                            route.backendPort());
+                if (!(backend.getInfo().getSocketAddress() instanceof InetSocketAddress backendAddress)) {
+                    plugin.Logger.warn("Ignoring UDP route from backend " + serverName
+                            + ": backend does not use an IP socket.");
+                    event.setCancelled(true);
+                    return;
                 }
+                String backendHost = backendAddress.getHostString();
+                plugin.getUdpRelayManager().registerRoute(route.adapterId(), route.routeKey(), backendHost,
+                        route.backendPort());
             } else if (ProxyMessageCodec.UDP_ROUTE_UNREGISTER.equals(type)) {
                 ProxyMessageCodec.UdpRouteUnregister route = ProxyMessageCodec.decodeUdpRouteUnregister(data);
                 plugin.getUdpRelayManager().unregisterRoute(route.adapterId(), route.routeKey());
@@ -81,15 +85,5 @@ public class PluginMessageHandler implements Listener {
         }
 
         event.setCancelled(true);
-    }
-
-    private String backendHost(PluginMessageEvent event) {
-        if (event.getSender() instanceof Server backend) {
-            return backend.getInfo().getAddress().getHostString();
-        }
-        if (event.getSender() instanceof ProxiedPlayer player && player.getServer() != null) {
-            return player.getServer().getInfo().getAddress().getHostString();
-        }
-        return null;
     }
 }

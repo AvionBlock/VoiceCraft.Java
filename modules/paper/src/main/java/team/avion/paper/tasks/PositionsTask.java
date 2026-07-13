@@ -10,22 +10,33 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.Location;
 
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.entity.Player;
 import org.bukkit.World;
 import org.bukkit.util.BlockIterator;
 import org.bukkit.util.Vector;
 
 public class PositionsTask extends BukkitRunnable {
+    private static final Set<Material> CAVE_MATERIALS = Set.of(
+            Material.STONE, Material.DIORITE, Material.GRANITE, Material.DEEPSLATE, Material.TUFF);
+
     private final VoiceCraftJava plugin;
     private final String lang;
+    private final AtomicBoolean networkOperationRunning = new AtomicBoolean(false);
+    private final Map<UUID, CaveSample> caveSamples = new HashMap<>();
     private boolean isConnected = false;
     private int reconnectRetries = 0;
     private boolean reconnecting = false;
+    private int caveScansRemaining;
 
     public PositionsTask(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
@@ -34,37 +45,63 @@ public class PositionsTask extends BukkitRunnable {
 
     @Override
     public void run() {
+        List<Player> players = List.copyOf(plugin.getServer().getOnlinePlayers());
+        caveSamples.keySet().removeIf(playerId -> players.stream().noneMatch(player -> player.getUniqueId().equals(playerId)));
+        caveScansRemaining = Math.max(1,
+                plugin.getConfig().getInt("config.voice.cave-scans-per-update", 2));
+
         if (plugin.usesProxy) {
             isConnected = plugin.isConnected();
             if (!isConnected) {
                 return;
             }
 
-            for (Player player : plugin.getServer().getOnlinePlayers()) {
+            for (Player player : players) {
                 plugin.getMessageHandler().sendSnapshot(player, getPlayerSnapshot(player));
             }
             return;
         }
 
         if (reconnecting) {
-            reconnect();
+            scheduleReconnect();
             return;
         }
 
         isConnected = plugin.isConnected();
-        List<ProxyPlayerSnapshot> snapshots = plugin.getServer().getOnlinePlayers().stream()
-                .map(this::getPlayerSnapshot)
-                .toList();
-        if (isConnected && plugin.getSessionManager().tick(snapshots)) {
-            return;
-        }
-
         if (!isConnected) {
             return;
         }
 
+        List<ProxyPlayerSnapshot> snapshots = players.stream()
+                .map(this::getPlayerSnapshot)
+                .toList();
+        scheduleTick(snapshots);
+    }
+
+    private void scheduleTick(List<ProxyPlayerSnapshot> snapshots) {
+        if (!networkOperationRunning.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                boolean connected = tickSafely(snapshots);
+                runPluginTask(() -> {
+                    networkOperationRunning.set(false);
+                    if (!connected && plugin.isConnected()) {
+                        handleConnectionLost();
+                    }
+                });
+            });
+        } catch (org.bukkit.plugin.IllegalPluginAccessException exception) {
+            networkOperationRunning.set(false);
+        }
+    }
+
+    private void handleConnectionLost() {
         plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-lost"));
         plugin.setNotConnected();
+        isConnected = false;
 
         if (plugin.getConfig().getBoolean("config.auto-reconnect")) {
             if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
@@ -73,14 +110,14 @@ public class PositionsTask extends BukkitRunnable {
             }
             reconnectRetries = 0;
             reconnecting = true;
-            reconnect();
-            return;
+            scheduleReconnect();
+        } else {
+            if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
+                Bukkit.broadcast(Component.text(Language.getMessage(lang, "plugin-connection-lost"))
+                        .color(NamedTextColor.RED));
+            }
+            cancel();
         }
-        if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
-            Bukkit.broadcast(Component.text(Language.getMessage(lang, "plugin-connection-lost"))
-                    .color(NamedTextColor.RED));
-        }
-        cancel();
     }
 
     public double getCaveDensity(Player player) {
@@ -88,13 +125,15 @@ public class PositionsTask extends BukkitRunnable {
             return 0.0;
         }
 
-        String[] caveBlocks = {
-                "STONE",
-                "DIORITE",
-                "GRANITE",
-                "DEEPSLATE",
-                "TUFF"
-        };
+        long now = System.currentTimeMillis();
+        CaveSample cached = caveSamples.get(player.getUniqueId());
+        if (cached != null && now < cached.refreshAfterMillis()) {
+            return cached.density();
+        }
+        if (caveScansRemaining <= 0) {
+            return cached == null ? 0.0 : cached.density();
+        }
+        caveScansRemaining--;
 
         int blockCount = 0;
         for (int x = -1; x <= 1; x++) {
@@ -104,31 +143,30 @@ public class PositionsTask extends BukkitRunnable {
                         continue; // a vector of 0,0,0 won't go anywhere, so skip it...
                     Vector direction = new Vector(x, y, z);
                     blockCount += castRayUntilBlock(
-                            new BlockIterator(player.getWorld(), player.getLocation().toVector(), direction, 0, 50),
-                            caveBlocks);
+                            new BlockIterator(player.getWorld(), player.getEyeLocation().toVector(), direction, 0, 50));
                 }
             }
         }
 
         // (3 * 3 * 3) - 1 = 26.0
-        return blockCount / 26.0; // Total blocks checked
+        double density = blockCount / 26.0;
+        long refreshInterval = Math.max(250L,
+                plugin.getConfig().getLong("config.voice.cave-scan-interval-ms", 1000L));
+        caveSamples.put(player.getUniqueId(), new CaveSample(density, now + refreshInterval));
+        return density;
     }
 
-    private int castRayUntilBlock(BlockIterator blockIterator, String[] caveBlocks) {
+    private int castRayUntilBlock(BlockIterator blockIterator) {
         while (blockIterator.hasNext()) {
             Block block = blockIterator.next();
             if (block.getType().isSolid()) {
-                if (Arrays.asList(caveBlocks).contains(getBlockType(block))) {
+                if (CAVE_MATERIALS.contains(block.getType())) {
                     return 1;
                 }
                 break;
             }
         }
         return 0;
-    }
-
-    private String getBlockType(Block block) {
-        return block.getType().toString();
     }
 
     public ProxyPlayerSnapshot getPlayerSnapshot(Player player) {
@@ -156,8 +194,12 @@ public class PositionsTask extends BukkitRunnable {
         };
     }
 
-    private boolean reconnect() {
+    private void scheduleReconnect() {
+        if (!networkOperationRunning.compareAndSet(false, true)) {
+            return;
+        }
         if (reconnectRetries >= 5) {
+            networkOperationRunning.set(false);
             reconnecting = false;
             plugin.Logger.error(Language.getMessage(lang, "plugin-connection-reconnecting-failed"));
             if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
@@ -165,24 +207,66 @@ public class PositionsTask extends BukkitRunnable {
                         .color(NamedTextColor.RED));
             }
             cancel();
-            return false;
+            return;
         }
 
         reconnectRetries++;
         plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-attempt").replace("$attempt",
                 Integer.toString(reconnectRetries)));
 
-        if (plugin.reconnect(true)) {
-            reconnecting = false;
-            plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-success"));
-            if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
-                Bukkit.broadcast(Component.text(Language.getMessage(lang, "plugin-connection-reconnecting-success"))
-                        .color(NamedTextColor.GREEN));
-            }
-            return true;
+        try {
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                boolean connected = reconnectSafely();
+                runPluginTask(() -> {
+                    networkOperationRunning.set(false);
+                    if (connected) {
+                        reconnecting = false;
+                        isConnected = true;
+                        plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-success"));
+                        if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
+                            Bukkit.broadcast(Component.text(Language.getMessage(lang,
+                                    "plugin-connection-reconnecting-success")).color(NamedTextColor.GREEN));
+                        }
+                    } else {
+                        plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-failed-retry"));
+                    }
+                });
+            });
+        } catch (org.bukkit.plugin.IllegalPluginAccessException exception) {
+            networkOperationRunning.set(false);
         }
+    }
 
-        plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-failed-retry"));
-        return false;
+    private void runPluginTask(Runnable task) {
+        if (!plugin.isEnabled()) {
+            networkOperationRunning.set(false);
+            return;
+        }
+        try {
+            plugin.getServer().getScheduler().runTask(plugin, task);
+        } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
+            networkOperationRunning.set(false);
+        }
+    }
+
+    private boolean tickSafely(List<ProxyPlayerSnapshot> snapshots) {
+        try {
+            return plugin.getSessionManager().tick(snapshots);
+        } catch (Exception exception) {
+            plugin.Logger.warn("VoiceCraft position update failed: " + exception.getMessage());
+            return false;
+        }
+    }
+
+    private boolean reconnectSafely() {
+        try {
+            return plugin.reconnect(true);
+        } catch (Exception exception) {
+            plugin.Logger.warn("VoiceCraft reconnect failed: " + exception.getMessage());
+            return false;
+        }
+    }
+
+    private record CaveSample(double density, long refreshAfterMillis) {
     }
 }

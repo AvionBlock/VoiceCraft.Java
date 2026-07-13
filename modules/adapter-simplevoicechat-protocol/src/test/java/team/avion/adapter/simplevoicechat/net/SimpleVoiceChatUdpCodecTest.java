@@ -101,6 +101,31 @@ class SimpleVoiceChatUdpCodecTest {
     }
 
     @Test
+    void emptyPlayerSoundPacketEncodesAudioEndMarker() throws Exception {
+        SimpleVoiceChatSecret secret = fixedSecret();
+        UUID sourceId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+        byte[] encoded = codec.encodeServer(
+                new PlayerSoundPacket(sourceId, sourceId, new byte[0], 987L, false, 30F),
+                secret
+        );
+
+        SimpleVoiceChatBuffer outer = new SimpleVoiceChatBuffer(encoded);
+        assertEquals(SimpleVoiceChatUdpCodec.MAGIC, outer.readByte());
+        SimpleVoiceChatBuffer inner = new SimpleVoiceChatBuffer(secret.decrypt(
+                outer.readByteArray(SimpleVoiceChatUdpCodec.MAX_ENCRYPTED_PACKET_SIZE)
+        ));
+        assertEquals(SimpleVoiceChatPacketType.PLAYER_SOUND.id(), Byte.toUnsignedInt(inner.readByte()));
+        assertEquals(sourceId, inner.readUuid());
+        assertEquals(sourceId, inner.readUuid());
+        assertEquals(0, inner.readByteArray(MicPacket.MAX_OPUS_PAYLOAD_SIZE).length);
+        assertEquals(987L, inner.readLong());
+        assertEquals(Float.floatToIntBits(30F), inner.readInt());
+        assertEquals(0, inner.readByte());
+        assertEquals(0, inner.readableBytes());
+    }
+
+    @Test
     void simplePacketServerEnvelopeRoundTripsThroughDecryptedPayload() throws Exception {
         SimpleVoiceChatSecret secret = fixedSecret();
         byte[] encoded = codec.encodeServer(new SimplePacket(SimpleVoiceChatPacketType.CONNECTION_CHECK_ACK), secret);

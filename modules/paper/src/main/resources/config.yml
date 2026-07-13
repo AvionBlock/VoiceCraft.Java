@@ -1,4 +1,4 @@
-﻿config-version: 3 # DO NOT EDIT: used for automatic config migrations
+config-version: 4 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0"
       port: 24454
       public:
-        host: "0.0.0.0"
+        host: ""
         port: 0
     simple-voice-chat:
       enabled: false
@@ -64,3 +64,5 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5
+    cave-scan-interval-ms: 1000
+    cave-scans-per-update: 2

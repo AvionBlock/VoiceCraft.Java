@@ -3,6 +3,7 @@ plugins {
 }
 
 description = 'BungeeCord proxy runtime, VoiceCraft connection, and UDP relay for VoiceCraft.Java.'
+def pluginVersion = project.version.toString()
 
 dependencies {
     implementation project(':core')
@@ -14,7 +15,7 @@ dependencies {
 processResources {
     inputs.properties([
         name       : rootProject.ext.pluginName,
-        version    : project.version,
+        version    : pluginVersion,
         description: rootProject.description,
         url        : rootProject.ext.pluginUrl,
         author     : rootProject.ext.pluginAuthor
@@ -23,7 +24,7 @@ processResources {
     filesMatching('bungee.yml') {
         expand(
             name: rootProject.ext.pluginName,
-            version: project.version,
+            version: pluginVersion,
             description: rootProject.description,
             url: rootProject.ext.pluginUrl,
             author: rootProject.ext.pluginAuthor
@@ -43,4 +44,22 @@ tasks.shadowJar {
 
 tasks.build {
     dependsOn tasks.shadowJar
+}
+
+tasks.register('verifyPluginMetadata') {
+    dependsOn tasks.processResources
+    def metadataFile = layout.buildDirectory.file('resources/main/bungee.yml')
+    inputs.file(metadataFile)
+    inputs.property('expectedVersion', pluginVersion)
+
+    doLast {
+        def metadata = metadataFile.get().asFile.text
+        if (!metadata.contains("version: ${pluginVersion}")) {
+            throw new GradleException("BungeeCord bungee.yml version does not match ${pluginVersion}.")
+        }
+    }
+}
+
+tasks.check {
+    dependsOn tasks.verifyPluginMetadata
 }

@@ -6,6 +6,7 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
 description = 'Velocity proxy runtime, VoiceCraft connection, and UDP relay for VoiceCraft.Java.'
+def pluginVersion = project.version.toString()
 
 dependencies {
     implementation project(':core')
@@ -20,7 +21,7 @@ processResources {
     inputs.properties([
         id         : 'voicecraft-java',
         name       : rootProject.ext.pluginName,
-        version    : project.version,
+        version    : pluginVersion,
         description: rootProject.description,
         author     : rootProject.ext.pluginAuthor
     ])
@@ -29,7 +30,7 @@ processResources {
         expand(
             id: 'voicecraft-java',
             name: rootProject.ext.pluginName,
-            version: project.version,
+            version: pluginVersion,
             description: rootProject.description,
             author: rootProject.ext.pluginAuthor
         )
@@ -39,7 +40,7 @@ processResources {
 tasks.register('patchVelocityPluginJson') {
     dependsOn tasks.compileJava
     inputs.file(layout.buildDirectory.file('classes/java/main/velocity-plugin.json'))
-    inputs.property('version', project.version.toString())
+    inputs.property('version', pluginVersion)
     inputs.property('description', rootProject.description)
     inputs.property('author', rootProject.ext.pluginAuthor)
     outputs.file(layout.buildDirectory.file('classes/java/main/velocity-plugin.json'))
@@ -51,7 +52,7 @@ tasks.register('patchVelocityPluginJson') {
         }
 
         def metadata = new JsonSlurper().parse(pluginJsonFile)
-        metadata.version = project.version.toString()
+        metadata.version = pluginVersion
         metadata.description = rootProject.description
         metadata.authors = [rootProject.ext.pluginAuthor]
         pluginJsonFile.text = JsonOutput.toJson(metadata)

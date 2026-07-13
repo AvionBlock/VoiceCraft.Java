@@ -49,10 +49,9 @@ build:
     - ./gradlew clean build --no-daemon
     - mkdir -p dist
     - |
-      find modules -path "*/build/libs/*.jar" \
+      find modules -path "*/build/libs/VoiceCraft.Java-*.jar" \
         ! -name "*-sources.jar" \
         ! -name "*-thin.jar" \
-        ! -path "*/core/build/libs/*" \
         -exec cp {} dist/ \;
     - test -n "$(find dist -name '*.jar' -print -quit)"
   artifacts:
@@ -88,10 +87,9 @@ release_build:
       ./gradlew clean build -PVERSION="$BUILD_VERSION" --no-daemon
     - mkdir -p release-artifacts
     - |
-      find modules -path "*/build/libs/*.jar" \
+      find modules -path "*/build/libs/VoiceCraft.Java-*.jar" \
         ! -name "*-sources.jar" \
         ! -name "*-thin.jar" \
-        ! -path "*/core/build/libs/*" \
         -exec cp {} release-artifacts/ \;
     - test -n "$(find release-artifacts -name '*.jar' -print -quit)"
   artifacts:

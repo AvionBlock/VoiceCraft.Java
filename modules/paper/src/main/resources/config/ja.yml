@@ -1,4 +1,4 @@
-﻿config-version: 3 # 編集しないでください: configの自動移行に使用されます
+config-version: 4 # 編集しないでください: configの自動移行に使用されます
 
 config:
   debug: false # 追加のデバッグログを有効化します
@@ -14,7 +14,7 @@ config:
       bind-host: "0.0.0.0" # Plasmoクライアント用UDPバインドアドレス
       port: 24454 # Plasmoクライアント用UDPポート
       public:
-        host: "0.0.0.0" # Plasmo clients に送信する host; Velocity/Bungee 配下では proxy host を使用
+        host: "" # 空の場合は Minecraft 接続先を使用。Velocity/Bungee 配下では proxy host を指定
         port: 0 # Plasmo clients に送信する port; 0 は上の UDP port、または proxy relay port を設定
     simple-voice-chat:
       enabled: false # Simple Voice Chatクライアント互換を有効化
@@ -64,3 +64,5 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # 位置更新間隔（tick）
+    cave-scan-interval-ms: 1000 # プレイヤーごとの洞窟係数を再計算する最小間隔
+    cave-scans-per-update: 2 # 位置更新ごとの重い洞窟スキャン上限

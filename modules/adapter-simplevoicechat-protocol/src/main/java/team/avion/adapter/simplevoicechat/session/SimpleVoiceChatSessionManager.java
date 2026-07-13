@@ -50,6 +50,8 @@ public final class SimpleVoiceChatSessionManager {
      * @return created session
      */
     public SimpleVoiceChatClientSession createOrReplace(UUID playerId, String playerName, int voiceCraftEntityId) {
+        remove(playerId);
+
         SimpleVoiceChatClientSession session = new SimpleVoiceChatClientSession(
                 playerId,
                 playerName,
@@ -140,17 +142,19 @@ public final class SimpleVoiceChatSessionManager {
             return;
         }
 
+        Object token = new Object();
         ScheduledFuture<?> future = audioEndExecutor.schedule(
-                () -> sendPendingAudioEnd(session.playerId(), session.voiceCraftEntityId(), sequenceNumber),
+                () -> sendPendingAudioEnd(session.playerId(), session.voiceCraftEntityId(), sequenceNumber, token),
                 AUDIO_END_DELAY_MILLIS,
                 TimeUnit.MILLISECONDS
         );
-        pendingAudioEnds.put(session.playerId(), new PendingAudioEnd(future));
+        pendingAudioEnds.put(session.playerId(), new PendingAudioEnd(future, token));
     }
 
-    private void sendPendingAudioEnd(UUID playerId, int entityId, long sequenceNumber) {
-        PendingAudioEnd pending = pendingAudioEnds.remove(playerId);
-        if (pending == null || pending.future().isCancelled()) {
+    private void sendPendingAudioEnd(UUID playerId, int entityId, long sequenceNumber, Object token) {
+        PendingAudioEnd pending = pendingAudioEnds.get(playerId);
+        if (pending == null || pending.token() != token || pending.future().isCancelled()
+                || !pendingAudioEnds.remove(playerId, pending)) {
             return;
         }
         audioBridge.sendEntityAudioEnd(entityId, sequenceNumber);
@@ -165,7 +169,7 @@ public final class SimpleVoiceChatSessionManager {
         audioEndDebugMetrics.svcAudioEndCancelledByAudio();
     }
 
-    private record PendingAudioEnd(ScheduledFuture<?> future) {
+    private record PendingAudioEnd(ScheduledFuture<?> future, Object token) {
     }
 
     public interface AudioEndDebugMetrics {

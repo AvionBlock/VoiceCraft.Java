@@ -26,14 +26,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import team.avion.paper.VoiceCraftJava;
 import team.avion.protocol.VoiceCraftProtocol;
+import team.avion.protocol.VoiceCraftRuntimeArguments;
 import team.avion.protocol.VoiceCraftRuntimeDefaults;
 
 public class VoiceCraftProcessManager {
@@ -41,8 +39,6 @@ public class VoiceCraftProcessManager {
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
-    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
-
     private final VoiceCraftJava plugin;
     private final ExecutorService launcherExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "VoiceCraft.Java-Runtime-Launcher");
@@ -99,13 +95,8 @@ public class VoiceCraftProcessManager {
                 return;
             }
 
-            ManagedConfigSyncResult initialSync = syncManagedServerProperties(launchTarget.installDirectory());
-
             if (process != null && process.isAlive()) {
                 ensureLogPumps(process);
-                if (initialSync.changed()) {
-                    restartManagedProcess(launchTarget, "runtime.config-changed-restart");
-                }
                 return;
             }
             if (isEndpointReachable()) {
@@ -114,14 +105,6 @@ public class VoiceCraftProcessManager {
             }
 
             startManagedProcess(launchTarget);
-
-            if (initialSync.missing()) {
-                ManagedConfigSyncResult postStartSync = syncManagedServerProperties(launchTarget.installDirectory());
-                if (postStartSync.changed()) {
-                    restartManagedProcess(launchTarget,
-                            "runtime.config-generated-restart");
-                }
-            }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             plugin.Logger.errorLocalized("runtime.start-interrupted", "$error", ex.getMessage());
@@ -192,13 +175,6 @@ public class VoiceCraftProcessManager {
         waitUntilReachable();
     }
 
-    private void restartManagedProcess(LaunchTarget launchTarget, String reason) throws IOException {
-        plugin.Logger.infoLocalized(reason);
-        stopProcess();
-        process = null;
-        startManagedProcess(launchTarget);
-    }
-
     private void stopProcess() {
         if (process == null) {
             return;
@@ -256,16 +232,8 @@ public class VoiceCraftProcessManager {
     }
 
     private void appendRuntimeArguments(List<String> command) {
-        command.add("--transport-mode");
-        command.add("tcp");
-        command.add("--transport-host");
-        command.add(plugin.getHost());
-        command.add("--transport-port");
-        command.add(Integer.toString(plugin.getPort()));
-        command.add("--server-key");
-        command.add(plugin.getLoginToken());
-        command.add("--voice-port");
-        command.add(Integer.toString(plugin.getManagedVoicePort()));
+        command.addAll(VoiceCraftRuntimeArguments.tcp(plugin.getHost(), plugin.getPort(), plugin.getLoginToken(),
+                plugin.getManagedVoicePort()));
     }
 
     private void configureRuntimeEnvironment(ProcessBuilder builder) {
@@ -329,7 +297,7 @@ public class VoiceCraftProcessManager {
             }
             plugin.Logger.warnLocalized("runtime.release-check-failed", "$error", exception.getMessage());
             Path absoluteExecutablePath = executablePath.toAbsolutePath().normalize();
-            return new LaunchTarget(installDirectory, absoluteExecutablePath.getParent(),
+            return new LaunchTarget(absoluteExecutablePath.getParent(),
                     absoluteExecutablePath.toString(), List.of());
         }
         String releaseId = VoiceCraftRuntimeDefaults.GITLAB_BASE_URL + "|" + VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH
@@ -349,7 +317,7 @@ public class VoiceCraftProcessManager {
 
         executablePath.toFile().setExecutable(true);
         Path absoluteExecutablePath = executablePath.toAbsolutePath().normalize();
-        return new LaunchTarget(installDirectory, absoluteExecutablePath.getParent(), absoluteExecutablePath.toString(),
+        return new LaunchTarget(absoluteExecutablePath.getParent(), absoluteExecutablePath.toString(),
                 List.of());
     }
 
@@ -396,96 +364,6 @@ public class VoiceCraftProcessManager {
                 ? VoiceCraftRuntimeDefaults.EXECUTABLE_BASE_NAME + ".exe"
                 : VoiceCraftRuntimeDefaults.EXECUTABLE_BASE_NAME;
         return installDirectory.resolve(fileName).normalize();
-    }
-
-    private ManagedConfigSyncResult syncManagedServerProperties(Path installDirectory) throws IOException {
-        Path serverPropertiesPath = installDirectory.resolve("config").resolve("ServerProperties.json").normalize();
-        if (!Files.exists(serverPropertiesPath)) {
-            plugin.Logger.infoLocalized("runtime.config-not-present", "$path", serverPropertiesPath.toString());
-            return new ManagedConfigSyncResult(serverPropertiesPath, false, true);
-        }
-
-        JsonElement root = JsonParser.parseString(Files.readString(serverPropertiesPath, StandardCharsets.UTF_8));
-        if (!root.isJsonObject()) {
-            throw new IOException("Managed VoiceCraft config root must be a JSON object: " + serverPropertiesPath);
-        }
-
-        JsonObject rootObject = root.getAsJsonObject();
-        boolean changed = false;
-        changed |= setNestedNumber(rootObject, "VoiceCraftConfig", "Port", plugin.getManagedVoicePort());
-        changed |= setNestedBoolean(rootObject, "McTcpConfig", "Enabled", true);
-        changed |= setNestedString(rootObject, "McTcpConfig", "Hostname", plugin.getHost());
-        changed |= setNestedNumber(rootObject, "McTcpConfig", "Port", plugin.getPort());
-        changed |= setNestedString(rootObject, "McTcpConfig", "LoginToken", plugin.getLoginToken());
-        changed |= setNestedBoolean(rootObject, "McHttpConfig", "Enabled", false);
-        changed |= setNestedBoolean(rootObject, "McWssConfig", "Enabled", false);
-
-        if (changed) {
-            Files.writeString(serverPropertiesPath, PRETTY_GSON.toJson(rootObject) + System.lineSeparator(), StandardCharsets.UTF_8,
-                    StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-            return new ManagedConfigSyncResult(serverPropertiesPath, true, false);
-        }
-        return new ManagedConfigSyncResult(serverPropertiesPath, false, false);
-    }
-
-    private static boolean setNestedBoolean(JsonObject rootObject, String objectName, String propertyName,
-            boolean expectedValue) {
-        JsonObject object = nestedObject(rootObject, objectName);
-        JsonElement currentValue = object.get(propertyName);
-        if (currentValue != null && currentValue.isJsonPrimitive()
-                && currentValue.getAsJsonPrimitive().isBoolean()
-                && currentValue.getAsBoolean() == expectedValue) {
-            return false;
-        }
-
-        object.addProperty(propertyName, expectedValue);
-        return true;
-    }
-
-    private static boolean setNestedNumber(JsonObject rootObject, String objectName, String propertyName,
-            int expectedValue) {
-        JsonObject object = nestedObject(rootObject, objectName);
-        JsonElement currentValue = object.get(propertyName);
-        if (currentValue != null && currentValue.isJsonPrimitive()) {
-            try {
-                if (currentValue.getAsInt() == expectedValue) {
-                    return false;
-                }
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        object.addProperty(propertyName, expectedValue);
-        return true;
-    }
-
-    private static boolean setNestedString(JsonObject rootObject, String objectName, String propertyName,
-            String expectedValue) {
-        JsonObject object = nestedObject(rootObject, objectName);
-        String normalizedValue = expectedValue == null ? "" : expectedValue;
-        JsonElement currentValue = object.get(propertyName);
-        if (currentValue != null && currentValue.isJsonPrimitive()
-                && normalizedValue.equals(currentValue.getAsString())) {
-            return false;
-        }
-
-        object.addProperty(propertyName, normalizedValue);
-        return true;
-    }
-
-    private static JsonObject nestedObject(JsonObject rootObject, String objectName) {
-        JsonElement currentObject = rootObject.get(objectName);
-        if (currentObject != null && currentObject.isJsonObject()) {
-            return currentObject.getAsJsonObject();
-        }
-
-        JsonObject object = new JsonObject();
-        rootObject.add(objectName, object);
-        return object;
-    }
-
-    Path getManagedServerPropertiesPath() {
-        return resolveInstallDirectory().resolve("config").resolve("ServerProperties.json").normalize();
     }
 
     private void downloadAndExtractRelease(Path installDirectory, VoiceCraftReleaseResolver.ReleaseAsset releaseAsset)
@@ -554,10 +432,7 @@ public class VoiceCraftProcessManager {
         return Character.toUpperCase(value.charAt(0)) + value.substring(1).toLowerCase(Locale.ROOT);
     }
 
-    private record LaunchTarget(Path installDirectory, Path workingDirectory, String command, List<String> arguments) {
-    }
-
-    private record ManagedConfigSyncResult(Path path, boolean changed, boolean missing) {
+    private record LaunchTarget(Path workingDirectory, String command, List<String> arguments) {
     }
 
 }

@@ -2,13 +2,26 @@ package team.avion.paper.voicecraft;
 
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
+import team.avion.protocol.VoiceCraftRuntimeArguments;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class VoiceCraftProcessManagerTest {
+    @Test
+    void buildsRuntimeOverridesWithoutEditingServerProperties() {
+        assertEquals(List.of(
+                        "--transport-mode", "tcp",
+                        "--transport-host", "127.0.0.1",
+                        "--transport-port", "9050",
+                        "--server-key", "secret-key",
+                        "--voice-port", "1111"),
+                VoiceCraftRuntimeArguments.tcp("127.0.0.1", 9050, "secret-key", 1111));
+    }
+
     @Test
     void selectsVersionedServerAssetFromGitLabReleaseMetadata() throws Exception {
         String json = """

@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -26,8 +25,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -509,49 +506,8 @@ public class VoiceCraftProcessManager {
             throw new IOException("Unexpected HTTP status " + response.statusCode() + " while downloading " + downloadUrl);
         }
 
-        deleteDirectoryContents(installDirectory);
-        try (InputStream body = response.body(); ZipInputStream zipInputStream = new ZipInputStream(body)) {
-            ZipEntry entry;
-            while ((entry = zipInputStream.getNextEntry()) != null) {
-                Path target = installDirectory.resolve(entry.getName()).normalize();
-                if (!target.startsWith(installDirectory)) {
-                    throw new IOException("Refusing to extract outside of install directory: " + entry.getName());
-                }
-
-                if (entry.isDirectory()) {
-                    Files.createDirectories(target);
-                    continue;
-                }
-
-                Files.createDirectories(target.getParent());
-                try (OutputStream outputStream = Files.newOutputStream(target, StandardOpenOption.CREATE,
-                        StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
-                    zipInputStream.transferTo(outputStream);
-                }
-            }
-        }
-    }
-
-    private static void deleteDirectoryContents(Path directory) throws IOException {
-        if (!Files.exists(directory)) {
-            return;
-        }
-
-        try (var stream = Files.walk(directory)) {
-            stream.sorted((left, right) -> right.getNameCount() - left.getNameCount())
-                    .filter(path -> !path.equals(directory))
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (IOException ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    });
-        } catch (RuntimeException ex) {
-            if (ex.getCause() instanceof IOException ioException) {
-                throw ioException;
-            }
-            throw ex;
+        try (InputStream body = response.body()) {
+            VoiceCraftReleaseArchive.extract(body, installDirectory);
         }
     }
 

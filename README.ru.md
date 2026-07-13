@@ -2,7 +2,9 @@
 
 [English](README.md) | [Русский](README.ru.md) | [Nederlands](README.nl.md) | [日本語](README.ja.md)
 
-VoiceCraft.Java — ультимативный плагин совместимости голосового чата для Java Minecraft-серверов.
+**VoiceCraft.Java — ультимативный плагин межклиентского proximity voice chat, объединяющий VoiceCraft, Simple Voice Chat и Plasmo Voice на Java и Bedrock.**
+
+VoiceCraft.Java — плагин совместимости, который объединяет всех этих клиентов в одном голосовом пространстве Java Minecraft-сервера.
 
 Он превращает VoiceCraft в общий серверный голосовой слой, где игроки с разными голосовыми клиентами находятся в одном пространстве proximity voice. Пользователи Simple Voice Chat, Plasmo Voice и игроки, подключенные через VoiceCraft client, могут слышать друг друга и говорить через один VoiceCraft backend.
 

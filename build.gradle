@@ -4,7 +4,7 @@ plugins {
 
 group = 'team.avion'
 version = project.hasProperty('VERSION') ? project.VERSION : '2.0.0-SNAPSHOT'
-description = 'Java-side VoiceCraft bridge with Paper adapters, proxy networking, and managed runtime support.'
+description = 'VoiceCraft.Java — the ultimate cross-client proximity voice chat plugin connecting VoiceCraft, Simple Voice Chat, and Plasmo Voice across Java and Bedrock.'
 
 ext {
     pluginName = 'VoiceCraft.Java'

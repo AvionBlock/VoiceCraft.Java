@@ -3,7 +3,7 @@ name: VoiceCraft.Java
 version: ${version}
 
 main: team.avion.paper.VoiceCraftJava
-description: Java-side VoiceCraft bridge with Paper adapters, proxy networking, and managed runtime support.
+description: VoiceCraft.Java — the ultimate cross-client proximity voice chat plugin connecting VoiceCraft, Simple Voice Chat, and Plasmo Voice across Java and Bedrock.
 
 author: lil-jon-crunk
 website: https://java.voicecraft.chat

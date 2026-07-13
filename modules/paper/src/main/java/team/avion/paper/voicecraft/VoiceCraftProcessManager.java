@@ -9,7 +9,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -323,17 +322,29 @@ public class VoiceCraftProcessManager {
 
         String platform = defaultPlatform();
         String architecture = defaultArchitecture();
-        String assetName = resolveAssetName(platform, architecture);
-        String releaseId = VoiceCraftRuntimeDefaults.GITLAB_BASE_URL + "|" + VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH
-                + "|" + VoiceCraftRuntimeDefaults.RELEASE + "|" + VoiceCraftProtocol.VERSION_STRING + "|" + assetName;
         Path releaseMarker = installDirectory.resolve(".voicecraft-java-release");
         Path executablePath = resolveManagedExecutable(installDirectory, platform);
+        VoiceCraftReleaseResolver.ReleaseAsset releaseAsset;
+        try {
+            releaseAsset = resolveReleaseAsset(platform, architecture);
+        } catch (IOException exception) {
+            if (!Files.exists(executablePath)) {
+                throw exception;
+            }
+            plugin.Logger.warn("Could not check the configured VoiceCraft release; using the installed runtime: "
+                    + exception.getMessage());
+            Path absoluteExecutablePath = executablePath.toAbsolutePath().normalize();
+            return new LaunchTarget(installDirectory, absoluteExecutablePath.getParent(),
+                    absoluteExecutablePath.toString(), List.of());
+        }
+        String releaseId = VoiceCraftRuntimeDefaults.GITLAB_BASE_URL + "|" + VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH
+                + "|" + releaseAsset.tagName() + "|" + VoiceCraftProtocol.VERSION_STRING + "|" + releaseAsset.name();
 
         if (!Files.exists(executablePath) || !releaseId.equals(readReleaseMarker(releaseMarker))) {
-            plugin.Logger.info("Preparing VoiceCraft runtime " + VoiceCraftRuntimeDefaults.RELEASE
+            plugin.Logger.info("Preparing VoiceCraft runtime " + releaseAsset.tagName()
                     + " for McApi protocol " + VoiceCraftProtocol.VERSION_STRING
                     + " (" + platform + "/" + architecture + ").");
-            downloadAndExtractRelease(installDirectory, assetName);
+            downloadAndExtractRelease(installDirectory, releaseAsset);
             writeReleaseMarker(releaseMarker, releaseId);
         }
 
@@ -362,8 +373,28 @@ public class VoiceCraftProcessManager {
         return plugin.getDataFolder().toPath().resolve(path).toAbsolutePath().normalize();
     }
 
-    private String resolveAssetName(String platform, String architecture) {
-        return VoiceCraftRuntimeDefaults.EXECUTABLE_BASE_NAME + "." + capitalize(platform) + "." + architecture + ".zip";
+    private VoiceCraftReleaseResolver.ReleaseAsset resolveReleaseAsset(String platform, String architecture)
+            throws IOException, InterruptedException {
+        String apiUrl = VoiceCraftReleaseResolver.buildReleaseApiUrl(VoiceCraftRuntimeDefaults.GITLAB_BASE_URL,
+                VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH, VoiceCraftRuntimeDefaults.RELEASE);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl))
+                .timeout(Duration.ofSeconds(30))
+                .GET()
+                .build();
+        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() != 200) {
+            throw new IOException("Unexpected HTTP status " + response.statusCode()
+                    + " while reading release metadata " + apiUrl);
+        }
+
+        JsonElement releaseJson;
+        try {
+            releaseJson = JsonParser.parseString(response.body());
+        } catch (RuntimeException exception) {
+            throw new IOException("Invalid VoiceCraft release metadata from " + apiUrl, exception);
+        }
+        return VoiceCraftReleaseResolver.selectReleaseAsset(releaseJson, platform, architecture);
     }
 
     private Path resolveManagedExecutable(Path installDirectory, String platform) {
@@ -463,12 +494,11 @@ public class VoiceCraftProcessManager {
         return resolveInstallDirectory().resolve("config").resolve("ServerProperties.json").normalize();
     }
 
-    private void downloadAndExtractRelease(Path installDirectory, String assetName) throws IOException, InterruptedException {
-        String downloadUrl = buildReleaseUrl(VoiceCraftRuntimeDefaults.GITLAB_BASE_URL,
-                VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH,
-                VoiceCraftRuntimeDefaults.RELEASE, assetName);
+    private void downloadAndExtractRelease(Path installDirectory, VoiceCraftReleaseResolver.ReleaseAsset releaseAsset)
+            throws IOException, InterruptedException {
+        String downloadUrl = releaseAsset.url();
 
-        plugin.Logger.info("Downloading VoiceCraft release asset " + assetName + "...");
+        plugin.Logger.info("Downloading VoiceCraft release asset " + releaseAsset.name() + "...");
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(downloadUrl))
                 .timeout(Duration.ofSeconds(30))
@@ -500,19 +530,6 @@ public class VoiceCraftProcessManager {
                 }
             }
         }
-    }
-
-    private static String buildReleaseUrl(String baseUrl, String projectPath, String release, String assetName) {
-        String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        String releasePath = "latest".equalsIgnoreCase(release)
-                ? "permalink/latest"
-                : encodePathSegment(release);
-        return normalizedBaseUrl + "/" + projectPath + "/-/releases/" + releasePath
-                + "/downloads/" + encodePathSegment(assetName);
-    }
-
-    private static String encodePathSegment(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private static void deleteDirectoryContents(Path directory) throws IOException {
@@ -589,4 +606,5 @@ public class VoiceCraftProcessManager {
 
     private record ManagedConfigSyncResult(Path path, boolean changed, boolean missing) {
     }
+
 }

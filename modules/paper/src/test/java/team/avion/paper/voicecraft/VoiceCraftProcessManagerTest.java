@@ -18,8 +18,9 @@ class VoiceCraftProcessManagerTest {
                         "--transport-host", "127.0.0.1",
                         "--transport-port", "9050",
                         "--server-key", "secret-key",
-                        "--voice-port", "1111"),
-                VoiceCraftRuntimeArguments.tcp("127.0.0.1", 9050, "secret-key", 1111));
+                        "--voice-port", "1111",
+                        "--language", "de-DE"),
+                VoiceCraftRuntimeArguments.tcp("127.0.0.1", 9050, "secret-key", 1111, "de"));
     }
 
     @Test

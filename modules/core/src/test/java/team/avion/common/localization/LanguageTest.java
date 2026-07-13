@@ -1,6 +1,7 @@
 package team.avion.common.localization;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
@@ -28,9 +29,11 @@ class LanguageTest {
     }
 
     @Test
-    void partialLocaleBundleFallsBackToEnglishForNewKeys() {
-        assertEquals("Managed VoiceCraft process is reachable.",
-                Language.getMessage("nl", "runtime.reachable"));
+    void loadsRuntimeMessagesForEverySupportedLanguage() {
+        for (String language : new String[] {"de", "nl", "pl", "ru", "th", "zh-cn", "zh-tw", "ja"}) {
+            String message = Language.getMessage(language, "runtime.reachable");
+            assertNotEquals("runtime.reachable", message);
+        }
     }
 
     @Test

@@ -233,7 +233,7 @@ public class VoiceCraftProcessManager {
 
     private void appendRuntimeArguments(List<String> command) {
         command.addAll(VoiceCraftRuntimeArguments.tcp(plugin.getHost(), plugin.getPort(), plugin.getLoginToken(),
-                plugin.getManagedVoicePort()));
+                plugin.getManagedVoicePort(), plugin.getLanguage()));
     }
 
     private void configureRuntimeEnvironment(ProcessBuilder builder) {

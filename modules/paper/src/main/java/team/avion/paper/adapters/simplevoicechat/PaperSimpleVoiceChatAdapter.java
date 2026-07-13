@@ -12,6 +12,8 @@ import team.avion.adapter.VoiceAdapter;
 import team.avion.adapter.VoiceCraftAudioSink;
 import team.avion.adapter.VoiceCraftEntityIdentity;
 import team.avion.adapter.VoiceCraftIdentityListener;
+import team.avion.adapter.VoiceCraftPlayerState;
+import team.avion.adapter.VoiceCraftPlayerStateListener;
 import team.avion.adapter.simplevoicechat.SimpleVoiceChatChannels;
 import team.avion.adapter.simplevoicechat.net.AuthenticatePacket;
 import team.avion.adapter.simplevoicechat.net.MicPacket;
@@ -51,7 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * audio bridge.</p>
  */
 public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCraftAudioSink, VoiceCraftIdentityListener,
-        PluginMessageListener, Listener {
+        VoiceCraftPlayerStateListener, PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_TIMEOUT_FACTOR = 10L;
 
     private final VoiceCraftJava plugin;
@@ -147,6 +149,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         udpThread.start();
 
         plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, SimpleVoiceChatChannels.REQUEST_SECRET, this);
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, SimpleVoiceChatChannels.UPDATE_STATE, this);
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.SECRET);
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.STATE);
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.STATES);
@@ -154,6 +157,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         context.audioBridge().registerAudioSink(this);
         context.audioBridge().registerIdentityListener(this);
+        context.audioBridge().registerPlayerStateListener(this);
         state = AdapterState.RUNNING;
         plugin.Logger.infoLocalized("adapter.listening", "$adapter", "Simple Voice Chat", "$bindHost", bindHost,
                 "$bindPort", Integer.toString(udpPort), "$publicHost",
@@ -171,6 +175,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         state = AdapterState.STOPPING;
         HandlerList.unregisterAll(this);
         plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, SimpleVoiceChatChannels.REQUEST_SECRET, this);
+        plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, SimpleVoiceChatChannels.UPDATE_STATE, this);
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.SECRET);
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.STATE);
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, SimpleVoiceChatChannels.STATES);
@@ -178,6 +183,7 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         if (context != null) {
             context.audioBridge().unregisterAudioSink(this);
             context.audioBridge().unregisterIdentityListener(this);
+            context.audioBridge().unregisterPlayerStateListener(this);
         }
 
         if (sessions != null) {
@@ -259,25 +265,38 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
         runPluginTask(() -> broadcastRemoveState(identity.playerId()));
     }
 
+    @Override
+    public void playerVoiceStateUpdated(VoiceCraftPlayerState state) {
+        if (!running.get() || !plugin.isEnabled()) {
+            return;
+        }
+        context.audioBridge().entityIdentities().stream()
+                .filter(identity -> identity.playerId().equals(state.playerId()))
+                .findFirst()
+                .ifPresent(identity -> runPluginTask(() -> broadcastState(identity)));
+    }
+
     private UUID syntheticSourceId(int entityId) {
         return UUID.nameUUIDFromBytes(("voicecraft-entity:" + entityId).getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        if (!SimpleVoiceChatChannels.REQUEST_SECRET.equals(channel)) {
-            return;
-        }
-
         try {
-            int clientCompatibilityVersion = tcpCodec.decodeRequestSecret(message);
-            if (clientCompatibilityVersion != compatibilityVersion) {
-                plugin.Logger.warnLocalized("adapter.incompatible-version", "$adapter", "Simple Voice Chat", "$player",
-                        player.getName(), "$clientVersion", Integer.toString(clientCompatibilityVersion), "$serverVersion",
-                        Integer.toString(compatibilityVersion));
-                return;
+            if (SimpleVoiceChatChannels.REQUEST_SECRET.equals(channel)) {
+                int clientCompatibilityVersion = tcpCodec.decodeRequestSecret(message);
+                if (clientCompatibilityVersion != compatibilityVersion) {
+                    plugin.Logger.warnLocalized("adapter.incompatible-version", "$adapter", "Simple Voice Chat", "$player",
+                            player.getName(), "$clientVersion", Integer.toString(clientCompatibilityVersion), "$serverVersion",
+                            Integer.toString(compatibilityVersion));
+                    return;
+                }
+                handleRequestSecret(player);
+            } else if (SimpleVoiceChatChannels.UPDATE_STATE.equals(channel)) {
+                boolean voiceDisabled = tcpCodec.decodeUpdateState(message);
+                context.audioBridge().updatePlayerVoiceState(
+                        new VoiceCraftPlayerState(player.getUniqueId(), voiceDisabled, false));
             }
-            handleRequestSecret(player);
         } catch (Exception exception) {
             plugin.Logger.warnLocalized("adapter.packet-decode-failed", "$adapter", "Simple Voice Chat", "$player",
                     player.getName(), "$error", exception.getMessage());
@@ -371,7 +390,10 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
     }
 
     private void sendInitialStates(Player player) {
-        byte[] payload = tcpCodec.encodePlayerStates(context.audioBridge().entityIdentities());
+        byte[] payload = tcpCodec.encodePlayerStates(context.audioBridge().entityIdentities(), playerId ->
+                context.audioBridge().playerVoiceState(playerId)
+                        .map(VoiceCraftPlayerState::voiceDisabled)
+                        .orElse(false));
         player.sendPluginMessage(plugin, SimpleVoiceChatChannels.STATES, payload);
     }
 
@@ -404,8 +426,11 @@ public final class PaperSimpleVoiceChatAdapter implements VoiceAdapter, VoiceCra
     }
 
     private void sendState(Player player, VoiceCraftEntityIdentity identity) {
+        boolean voiceDisabled = context.audioBridge().playerVoiceState(identity.playerId())
+                .map(VoiceCraftPlayerState::voiceDisabled)
+                .orElse(false);
         player.sendPluginMessage(plugin, SimpleVoiceChatChannels.STATE,
-                tcpCodec.encodePlayerState(identity, false, false));
+                tcpCodec.encodePlayerState(identity, voiceDisabled, false));
     }
 
     private void broadcastRemoveState(UUID playerId) {

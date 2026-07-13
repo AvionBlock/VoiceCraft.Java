@@ -4,6 +4,7 @@ import team.avion.adapter.VoiceCraftEntityIdentity;
 
 import java.util.Collection;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /**
  * Encoder and decoder for Simple Voice Chat plugin-message packets used during TCP-style setup.
@@ -19,6 +20,16 @@ public final class SimpleVoiceChatTcpCodec {
      */
     public int decodeRequestSecret(byte[] data) {
         return new SimpleVoiceChatBuffer(data).readInt();
+    }
+
+    /**
+     * Decodes the only voice control state that an SVC client exposes to the server.
+     *
+     * @param data raw update-state plugin-message payload
+     * @return whether the client disabled voice chat
+     */
+    public boolean decodeUpdateState(byte[] data) {
+        return new SimpleVoiceChatBuffer(data).readBoolean();
     }
 
     /**
@@ -71,10 +82,22 @@ public final class SimpleVoiceChatTcpCodec {
      * @return encoded state snapshot payload
      */
     public byte[] encodePlayerStates(Collection<VoiceCraftEntityIdentity> identities) {
+        return encodePlayerStates(identities, ignored -> false);
+    }
+
+    /**
+     * Encodes the initial player snapshot with the latest shared disabled states.
+     *
+     * @param identities identities currently visible through VoiceCraft
+     * @param voiceDisabled returns whether voice is disabled for a player UUID
+     * @return encoded state snapshot payload
+     */
+    public byte[] encodePlayerStates(Collection<VoiceCraftEntityIdentity> identities,
+                                     Predicate<UUID> voiceDisabled) {
         SimpleVoiceChatBuffer output = new SimpleVoiceChatBuffer();
         output.writeInt(identities.size());
         for (VoiceCraftEntityIdentity identity : identities) {
-            writePlayerState(output, identity, false, false);
+            writePlayerState(output, identity, voiceDisabled.test(identity.playerId()), false);
         }
         return output.toByteArray();
     }

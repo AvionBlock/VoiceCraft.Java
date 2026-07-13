@@ -13,6 +13,8 @@ import team.avion.adapter.VoiceAdapter;
 import team.avion.adapter.VoiceCraftAudioSink;
 import team.avion.adapter.VoiceCraftEntityIdentity;
 import team.avion.adapter.VoiceCraftIdentityListener;
+import team.avion.adapter.VoiceCraftPlayerState;
+import team.avion.adapter.VoiceCraftPlayerStateListener;
 import team.avion.adapter.plasmo.PlasmoChannels;
 import team.avion.adapter.plasmo.PlasmoPacket;
 import team.avion.adapter.plasmo.data.McGameProfile;
@@ -64,7 +66,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAudioSink, VoiceCraftIdentityListener,
-        PluginMessageListener, Listener {
+        VoiceCraftPlayerStateListener, PluginMessageListener, Listener {
     private static final long KEEP_ALIVE_INTERVAL_MS = 1000L;
     private static final long KEEP_ALIVE_TIMEOUT_MS = 30000L;
     private static final byte SOURCE_STATE = 1;
@@ -78,7 +80,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     private final Map<UUID, PlayerSourceInfo> sourcesById = new ConcurrentHashMap<>();
     private final Map<Integer, PlayerSourceInfo> sourcesByEntityId = new ConcurrentHashMap<>();
     private final Map<Integer, Long> sourceSequencesByEntity = new ConcurrentHashMap<>();
-    private final Map<UUID, PlasmoPlayerState> playerStatesById = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> sentSourcesByReceiver = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> pendingSourcesByReceiver = new ConcurrentHashMap<>();
 
@@ -152,6 +153,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         context.audioBridge().registerAudioSink(this);
         context.audioBridge().registerIdentityListener(this);
+        context.audioBridge().registerPlayerStateListener(this);
         state = AdapterState.RUNNING;
         plugin.Logger.infoLocalized("adapter.listening", "$adapter", "Plasmo Voice", "$bindHost", bindHost,
                 "$bindPort", Integer.toString(udpPort), "$publicHost",
@@ -174,6 +176,7 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         if (context != null) {
             context.audioBridge().unregisterAudioSink(this);
             context.audioBridge().unregisterIdentityListener(this);
+            context.audioBridge().unregisterPlayerStateListener(this);
         }
 
         if (sessions != null) {
@@ -268,11 +271,29 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             return;
         }
         plugin.getServer().getScheduler().runTask(plugin, () -> {
+            PlayerSourceInfo previous = sourcesByEntityId.get(identity.entityId());
+            UUID staleSourceId = previous != null && !previous.sourceId().equals(identity.playerId())
+                    ? previous.sourceId()
+                    : null;
             PlayerSourceInfo sourceInfo = sourceInfoForEntity(identity.entityId(),
                     sessions.byPlayerId(identity.playerId()).orElse(null));
+            if (staleSourceId != null) {
+                broadcastPlayerDisconnect(staleSourceId);
+            }
             broadcastPlayerInfo(voicePlayerInfo(identity));
             sendSourceInfoToConfiguredPlayers(sourceInfo);
         });
+    }
+
+    @Override
+    public void playerVoiceStateUpdated(VoiceCraftPlayerState state) {
+        if (!running.get() || !plugin.isEnabled()) {
+            return;
+        }
+        context.audioBridge().entityIdentities().stream()
+                .filter(identity -> identity.playerId().equals(state.playerId()))
+                .findFirst()
+                .ifPresent(identity -> runPluginTask(() -> broadcastPlayerInfo(voicePlayerInfo(identity))));
     }
 
     @Override
@@ -283,7 +304,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         sourcesByEntityId.remove(identity.entityId());
         sourcesById.remove(identity.playerId());
         sourceSequencesByEntity.remove(identity.entityId());
-        playerStatesById.remove(identity.playerId());
         sentSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(identity.playerId()));
         pendingSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(identity.playerId()));
         plugin.getServer().getScheduler().runTask(plugin, () -> broadcastPlayerDisconnect(identity.playerId()));
@@ -313,13 +333,8 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
                 debugLocalized("adapter-debug.client-state", "$adapter", "Plasmo", "$player", player.getName(),
                         "$voiceDisabled", Boolean.toString(statePacket.voiceDisabled()), "$microphoneMuted",
                         Boolean.toString(statePacket.microphoneMuted()));
-                playerStatesById.put(player.getUniqueId(), new PlasmoPlayerState(
-                        statePacket.voiceDisabled(),
-                        statePacket.microphoneMuted()
-                ));
-                sessions.byPlayerId(player.getUniqueId())
-                        .flatMap(session -> context.audioBridge().entityIdentity(session.voiceCraftEntityId()))
-                        .ifPresent(identity -> broadcastPlayerInfo(voicePlayerInfo(identity)));
+                context.audioBridge().updatePlayerVoiceState(new VoiceCraftPlayerState(
+                        player.getUniqueId(), statePacket.voiceDisabled(), statePacket.microphoneMuted()));
             } else if (packet instanceof SourceInfoRequestPacket sourceInfoRequest) {
                 debugLocalized("adapter-debug.source-request", "$adapter", "Plasmo", "$player", player.getName(),
                         "$source", sourceInfoRequest.sourceId().toString());
@@ -350,7 +365,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (sessions.byPlayerId(event.getPlayer().getUniqueId()).isPresent()) {
             PlasmoClientSession session = sessions.byPlayerId(event.getPlayer().getUniqueId()).orElse(null);
-            playerStatesById.remove(event.getPlayer().getUniqueId());
             sentSourcesByReceiver.remove(event.getPlayer().getUniqueId());
             pendingSourcesByReceiver.remove(event.getPlayer().getUniqueId());
             if (session != null) {
@@ -374,9 +388,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     }
 
     private void handlePlayerInfo(Player player, PlayerInfoPacket packet) {
-        if (packet.voiceDisabled()) {
-            return;
-        }
         if (!plugin.isConnected()) {
             plugin.Logger.warnLocalized("adapter.join-before-connected", "$adapter", "Plasmo", "$player", player.getName());
             return;
@@ -391,9 +402,10 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         }
 
         PlasmoClientSession session = sessions.createOrReplace(player.getUniqueId(), player.getName(), entityId.getAsInt());
-        playerStatesById.put(player.getUniqueId(), new PlasmoPlayerState(packet.voiceDisabled(), packet.microphoneMuted()));
         context.audioBridge().registerEntityIdentity(new VoiceCraftEntityIdentity(entityId.getAsInt(),
                 player.getUniqueId(), player.getName(), id()));
+        context.audioBridge().updatePlayerVoiceState(new VoiceCraftPlayerState(
+                player.getUniqueId(), packet.voiceDisabled(), packet.microphoneMuted()));
         PlayerSourceInfo sourceInfo = sourceInfoForEntity(entityId.getAsInt(), session);
         debugLocalized("adapter-debug.session-created", "$adapter", "Plasmo", "$player", player.getName(),
                 "$entity", Integer.toString(entityId.getAsInt()), "$secret", session.udpSecret().toString(),
@@ -505,7 +517,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
 
     private void cleanupExpiredSession(PlasmoClientSession session) {
         sessions.remove(session.playerId());
-        playerStatesById.remove(session.playerId());
         sentSourcesByReceiver.remove(session.playerId());
         pendingSourcesByReceiver.remove(session.playerId());
         context.audioBridge().unregisterEntityIdentity(session.voiceCraftEntityId());
@@ -515,7 +526,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
 
     private void cleanupSession(PlasmoClientSession session, Player carrier, boolean destroyEntity) {
         sessions.remove(session.playerId());
-        playerStatesById.remove(session.playerId());
         sentSourcesByReceiver.remove(session.playerId());
         pendingSourcesByReceiver.remove(session.playerId());
         unregisterProxyUdpRoute(carrier, session);
@@ -548,6 +558,12 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
             return existing;
         }
 
+        if (existing != null && !existing.sourceId().equals(identity.playerId())) {
+            sourcesById.remove(existing.sourceId(), existing);
+            sentSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(existing.sourceId()));
+            pendingSourcesByReceiver.values().forEach(sourceIds -> sourceIds.remove(existing.sourceId()));
+        }
+
         PlayerSourceInfo sourceInfo = new PlayerSourceInfo(
                 "voicecraft",
                 identity.playerId(),
@@ -572,8 +588,8 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     }
 
     private VoicePlayerInfo voicePlayerInfo(VoiceCraftEntityIdentity identity) {
-        PlasmoPlayerState state = playerStatesById.getOrDefault(identity.playerId(),
-                new PlasmoPlayerState(false, false));
+        VoiceCraftPlayerState state = context.audioBridge().playerVoiceState(identity.playerId())
+                .orElseGet(() -> new VoiceCraftPlayerState(identity.playerId(), false, false));
         return new VoicePlayerInfo(identity.playerId(), identity.playerName(), false,
                 state.voiceDisabled(), state.microphoneMuted());
     }
@@ -628,7 +644,6 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
     }
 
     private void broadcastPlayerDisconnect(UUID playerId) {
-        playerStatesById.remove(playerId);
         for (PlasmoClientSession receiver : sessions.sessions()) {
             Player player = plugin.getServer().getPlayer(receiver.playerId());
             if (player == null || !player.isOnline()) {
@@ -742,6 +757,4 @@ public final class PaperPlasmoVoiceAdapter implements VoiceAdapter, VoiceCraftAu
         forwardedAudioBytes = 0;
     }
 
-    private record PlasmoPlayerState(boolean voiceDisabled, boolean microphoneMuted) {
-    }
 }

@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +21,8 @@ import team.avion.adapter.VoiceCraftAudioBridge;
 import team.avion.adapter.VoiceCraftAudioSink;
 import team.avion.adapter.VoiceCraftEntityIdentity;
 import team.avion.adapter.VoiceCraftIdentityListener;
+import team.avion.adapter.VoiceCraftPlayerState;
+import team.avion.adapter.VoiceCraftPlayerStateListener;
 import team.avion.paper.VoiceCraftJava;
 import team.avion.proxy.ProxyPlayerSnapshot;
 import team.avion.protocol.McApiTcpClient;
@@ -66,6 +70,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private final Map<Integer, PendingEntity> unboundEntitiesById = new HashMap<>();
     private final Map<String, BoundEntity> boundEntitiesByPlayerName = new HashMap<>();
     private final Map<Integer, VoiceCraftEntityIdentity> entityIdentitiesById = new HashMap<>();
+    private final Map<UUID, VoiceCraftPlayerState> playerVoiceStatesById = new HashMap<>();
 
     private String host = "";
     private int port;
@@ -76,6 +81,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private String lastCreateEntityFailure = "";
     private final List<VoiceCraftAudioSink> audioSinks = new CopyOnWriteArrayList<>();
     private final List<VoiceCraftIdentityListener> identityListeners = new CopyOnWriteArrayList<>();
+    private final List<VoiceCraftPlayerStateListener> playerStateListeners = new CopyOnWriteArrayList<>();
     private final LinkedBlockingQueue<PendingAudioFrame> audioQueue = new LinkedBlockingQueue<>();
     private final AtomicBoolean audioWorkerRunning = new AtomicBoolean(false);
     private Thread audioWorkerThread;
@@ -302,6 +308,33 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     }
 
     @Override
+    public void registerPlayerStateListener(VoiceCraftPlayerStateListener listener) {
+        if (listener != null && !playerStateListeners.contains(listener)) {
+            playerStateListeners.add(listener);
+        }
+    }
+
+    @Override
+    public void unregisterPlayerStateListener(VoiceCraftPlayerStateListener listener) {
+        playerStateListeners.remove(listener);
+    }
+
+    @Override
+    public synchronized void updatePlayerVoiceState(VoiceCraftPlayerState state) {
+        if (state == null || state.equals(playerVoiceStatesById.put(state.playerId(), state))) {
+            return;
+        }
+        for (VoiceCraftPlayerStateListener listener : playerStateListeners) {
+            listener.playerVoiceStateUpdated(state);
+        }
+    }
+
+    @Override
+    public synchronized Optional<VoiceCraftPlayerState> playerVoiceState(UUID playerId) {
+        return Optional.ofNullable(playerVoiceStatesById.get(playerId));
+    }
+
+    @Override
     public synchronized void registerEntityIdentity(VoiceCraftEntityIdentity identity) {
         if (identity != null) {
             VoiceCraftEntityIdentity previous = entityIdentitiesById.put(identity.entityId(), identity);
@@ -315,6 +348,11 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     public synchronized void unregisterEntityIdentity(int entityId) {
         VoiceCraftEntityIdentity removed = entityIdentitiesById.remove(entityId);
         if (removed != null) {
+            boolean playerStillRegistered = entityIdentitiesById.values().stream()
+                    .anyMatch(identity -> identity.playerId().equals(removed.playerId()));
+            if (!playerStillRegistered) {
+                playerVoiceStatesById.remove(removed.playerId());
+            }
             notifyIdentityUnregistered(removed);
         }
     }
@@ -704,6 +742,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         unboundEntitiesById.clear();
         boundEntitiesByPlayerName.clear();
         entityIdentitiesById.clear();
+        playerVoiceStatesById.clear();
         identities.forEach(this::notifyIdentityUnregistered);
         plugin.getPlayerBinds().clear();
     }

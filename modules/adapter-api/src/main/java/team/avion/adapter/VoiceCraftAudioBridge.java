@@ -3,6 +3,7 @@ package team.avion.adapter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Shared audio and identity bus used by voice adapters to exchange VoiceCraft entity audio.
@@ -69,6 +70,40 @@ public interface VoiceCraftAudioBridge {
      * @param listener listener to unregister
      */
     default void unregisterIdentityListener(VoiceCraftIdentityListener listener) {
+    }
+
+    /**
+     * Registers a listener for client voice control changes.
+     *
+     * @param listener listener to register
+     */
+    default void registerPlayerStateListener(VoiceCraftPlayerStateListener listener) {
+    }
+
+    /**
+     * Unregisters a client voice control listener.
+     *
+     * @param listener listener to unregister
+     */
+    default void unregisterPlayerStateListener(VoiceCraftPlayerStateListener listener) {
+    }
+
+    /**
+     * Publishes voice controls explicitly reported by an adapter client.
+     *
+     * @param state current player voice state
+     */
+    default void updatePlayerVoiceState(VoiceCraftPlayerState state) {
+    }
+
+    /**
+     * Looks up the last voice controls reported for a player.
+     *
+     * @param playerId Minecraft player UUID
+     * @return reported state, if known
+     */
+    default Optional<VoiceCraftPlayerState> playerVoiceState(UUID playerId) {
+        return Optional.empty();
     }
 
     /**

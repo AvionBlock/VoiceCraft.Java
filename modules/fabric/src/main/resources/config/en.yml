@@ -1,0 +1,27 @@
+config-version: 1
+
+config:
+  debug: false
+  lang: "system"
+  auto-reconnect: true
+
+  voicecraft:
+    transport:
+      host: "127.0.0.1"
+      port: 9050
+      login-token: "__GENERATED_LOGIN_TOKEN__"
+    voice:
+      port: 1111
+    auto-start: true
+    shutdown-on-disable: true
+    invariant-globalization: true
+    ready-timeout-ms: 20000
+    install-directory: "voicecraft-runtime"
+
+  voice:
+    proximity-distance: 30
+    proximity-toggle: true
+    voice-effects: true
+    send-voicecraft-disconnect-message: true
+    send-connection-lost-message: true
+    position-update-interval-ticks: 5

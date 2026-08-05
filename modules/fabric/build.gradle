@@ -1,0 +1,92 @@
+plugins {
+    id 'fabric-loom' version '1.17.12'
+}
+
+description = 'Fabric adapter for VoiceCraft.Java.'
+def pluginVersion = project.version.toString()
+def minecraftVersion = providers.gradleProperty('mcVersion').orElse('1.21.11').get()
+def yarnVersion = providers.gradleProperty('yarnVersion').orElse("${minecraftVersion}+build.6").get()
+def fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').orElse('0.19.3').get()
+def fabricApiVersion = providers.gradleProperty('fabricApiVersion').orElse('0.141.5+1.21.11').get()
+def minecraftDependency = providers.gradleProperty('minecraftDependency').orElse('>=1.21.11').get()
+def minecraftArchiveVersion = minecraftVersion.replaceAll('[^A-Za-z0-9._-]', '_')
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    mappings "net.fabricmc:yarn:${yarnVersion}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${fabricLoaderVersion}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+
+    implementation project(':core')
+    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'org.yaml:snakeyaml:2.4'
+    implementation 'net.kyori:adventure-api:4.25.0'
+
+    include project(':core')
+    include 'com.google.code.gson:gson:2.13.2'
+    include 'org.yaml:snakeyaml:2.4'
+    include 'net.kyori:adventure-api:4.25.0'
+}
+
+processResources {
+    inputs.properties([
+        version            : pluginVersion,
+        description        : rootProject.description,
+        minecraftDependency: minecraftDependency,
+        fabricLoaderVersion: fabricLoaderVersion,
+        fabricApiVersion   : fabricApiVersion
+    ])
+
+    filesMatching('fabric.mod.json') {
+        expand(
+            version: pluginVersion,
+            description: rootProject.description,
+            minecraftDependency: minecraftDependency,
+            fabricLoaderVersion: fabricLoaderVersion,
+            fabricApiVersion: fabricApiVersion
+        )
+    }
+}
+
+tasks.jar {
+    archiveBaseName.set("${rootProject.ext.pluginName}-fabric")
+    archiveClassifier.set("${minecraftArchiveVersion}-thin")
+}
+
+tasks.remapJar {
+    archiveBaseName.set("${rootProject.ext.pluginName}-fabric")
+    archiveClassifier.set(minecraftArchiveVersion)
+}
+
+tasks.build {
+    dependsOn tasks.remapJar
+}
+
+tasks.register('verifyFabricMetadata') {
+    dependsOn tasks.processResources
+    def metadataFile = layout.buildDirectory.file('resources/main/fabric.mod.json')
+    inputs.file(metadataFile)
+    inputs.property('expectedVersion', pluginVersion)
+
+    doLast {
+        def metadata = metadataFile.get().asFile.text
+        if (!metadata.contains("\"version\": \"${pluginVersion}\"")) {
+            throw new GradleException("Fabric fabric.mod.json version does not match ${pluginVersion}.")
+        }
+    }
+}
+
+tasks.check {
+    dependsOn tasks.verifyFabricMetadata
+}
+
+tasks.register('printFabricTarget') {
+    doLast {
+        println("Fabric target:")
+        println("  minecraft=${minecraftVersion}")
+        println("  yarn=${yarnVersion}")
+        println("  loader=${fabricLoaderVersion}")
+        println("  fabric-api=${fabricApiVersion}")
+        println("  metadata minecraft=${minecraftDependency}")
+    }
+}

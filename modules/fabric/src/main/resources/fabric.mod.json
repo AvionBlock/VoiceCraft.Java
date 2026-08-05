@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "voicecraft-java",
+  "version": "${version}",
+  "name": "VoiceCraft.Java",
+  "description": "${description}",
+  "authors": [
+    "lil-jon-crunk"
+  ],
+  "contact": {
+    "homepage": "https://java.voicecraft.chat"
+  },
+  "license": "GPL-3.0-or-later",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "team.avion.fabric.VoiceCraftJava"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${fabricLoaderVersion}",
+    "fabric-api": ">=${fabricApiVersion}",
+    "minecraft": "${minecraftDependency}",
+    "java": ">=21"
+  }
+}

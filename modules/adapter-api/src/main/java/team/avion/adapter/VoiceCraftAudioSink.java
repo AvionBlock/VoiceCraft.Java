@@ -4,6 +4,11 @@ package team.avion.adapter;
  * Consumer of audio frames produced by the shared VoiceCraft audio bridge.
  */
 public interface VoiceCraftAudioSink {
+    /** Receives a protocol-neutral routed frame. */
+    default void receiveAudioFrame(VoiceAudioFrame frame) {
+        receiveEntityAudio(frame.source().voiceCraftEntityId(), frame.timestamp(), frame.loudness(), frame.opusFrame());
+    }
+
     /**
      * Receives one bridged Opus frame for a VoiceCraft entity.
      *

@@ -15,13 +15,16 @@ import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.common.localization.Language;
 import team.avion.adapter.AdapterContext;
-import team.avion.paper.adapters.plasmo.PaperPlasmoVoiceAdapter;
-import team.avion.paper.adapters.simplevoicechat.PaperSimpleVoiceChatAdapter;
+import team.avion.adapter.VoiceAdapter;
+import team.avion.paper.adapters.plasmo.PaperPlasmoVoiceBridge;
+import team.avion.paper.adapters.simplevoicechat.PaperSimpleVoiceChatBridge;
 import team.avion.paper.commands.VoiceCommand;
+import team.avion.paper.dependencies.ManagedVoiceDependencyInstaller;
 import team.avion.paper.listeners.*;
 import team.avion.paper.tasks.PositionsTask;
 import team.avion.paper.utils.*;
 import team.avion.paper.voicecraft.PaperVoiceCraftSessionManager;
+import team.avion.paper.voicecraft.PaperVoiceEndpointRegistry;
 import team.avion.paper.voicecraft.PlayerVoiceStatusOverlay;
 import team.avion.paper.voicecraft.VoiceCraftProcessManager;
 import team.avion.proxy.ProxyMessageCodec;
@@ -38,14 +41,23 @@ import java.util.Map;
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 7;
-    private static final String PLASMO_PUBLIC_HOST_PATH = "config.adapters.plasmo.public.host";
+    private static final int CURRENT_CONFIG_VERSION = 8;
     private static final String[] REMOVED_VOICE_UI_PATHS = {
             "config.voice.status-icons",
             "config.voice.not-in-voice-symbol",
             "config.voice.in-voice-symbol",
             "config.voice.send-bind-message",
-            "config.voice.send-disconnect-message"
+            "config.voice.send-disconnect-message",
+            "config.adapters.plasmo.bind-host",
+            "config.adapters.plasmo.port",
+            "config.adapters.plasmo.public",
+            "config.adapters.simple-voice-chat.bind-host",
+            "config.adapters.simple-voice-chat.port",
+            "config.adapters.simple-voice-chat.public",
+            "config.adapters.simple-voice-chat.compatibility-version",
+            "config.adapters.simple-voice-chat.mtu-size",
+            "config.adapters.simple-voice-chat.keep-alive-ms",
+            "config.adapters.simple-voice-chat.allow-recording"
     };
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
@@ -73,13 +85,25 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private @Getter PaperVoiceCraftSessionManager sessionManager;
     private PlayerVoiceStatusOverlay voiceStatusOverlay;
     private @Getter PositionsTask positionsTask;
-    private PaperPlasmoVoiceAdapter plasmoVoiceAdapter;
-    private PaperSimpleVoiceChatAdapter simpleVoiceChatAdapter;
+    private VoiceAdapter plasmoVoiceAdapter;
+    private VoiceAdapter simpleVoiceChatAdapter;
+    private @Getter PaperVoiceEndpointRegistry voiceEndpointRegistry;
+    private Object plasmoAddon;
     private volatile boolean reloadInProgress;
 
     private BukkitTask taskRunner;
 
     public PaperLogger Logger = new PaperLogger();
+
+    @Override
+    public void onLoad() {
+        if (getServer().getPluginManager().getPlugin("PlasmoVoice") != null) {
+            PaperPlasmoVoiceBridge bridge = new PaperPlasmoVoiceBridge(this);
+            plasmoVoiceAdapter = bridge;
+            plasmoAddon = bridge;
+            su.plo.voice.api.server.PlasmoVoiceServer.getAddonsLoader().load(bridge);
+        }
+    }
 
     /**
      * Executes upon enabling the plugin.
@@ -94,11 +118,14 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             return;
         }
         reloadConfig();
+        new ManagedVoiceDependencyInstaller(this).installMissingEnabledDependencies();
         voiceCraftProcessManager = new VoiceCraftProcessManager(this);
         sessionManager = new PaperVoiceCraftSessionManager(this);
+        voiceEndpointRegistry = new PaperVoiceEndpointRegistry(this);
         voiceStatusOverlay = new PlayerVoiceStatusOverlay(this);
-        plasmoVoiceAdapter = new PaperPlasmoVoiceAdapter(this);
-        simpleVoiceChatAdapter = new PaperSimpleVoiceChatAdapter(this);
+        if (getServer().getPluginManager().getPlugin("voicechat") != null) {
+            simpleVoiceChatAdapter = new PaperSimpleVoiceChatBridge(this);
+        }
 
         lang = resolveConfiguredLanguage();
         int positionTaskInterval = getConfig().getInt("config.voice.position-update-interval-ticks", 1);
@@ -124,6 +151,16 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         }
         stopPlasmoAdapter();
         stopSimpleVoiceChatAdapter();
+        if (voiceEndpointRegistry != null) {
+            voiceEndpointRegistry.clear();
+        }
+        if (plasmoAddon != null && getServer().getPluginManager().getPlugin("PlasmoVoice") != null) {
+            try {
+                su.plo.voice.api.server.PlasmoVoiceServer.getAddonsLoader().unload(plasmoAddon);
+            } catch (RuntimeException exception) {
+                Logger.warn("Failed to unload Plasmo Voice bridge: " + exception.getMessage());
+            }
+        }
         disconnect("Plugin disabled");
         if (taskRunner != null && !taskRunner.isCancelled()) {
             taskRunner.cancel();
@@ -187,6 +224,9 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         }
 
         if (usesProxy) {
+            if (!sessionManager.isConnected() && !sessionManager.connect()) {
+                Logger.warn("Proxy mode is active, but the auxiliary VoiceCraft audio connection could not be established. Native voice bridges will retry after reload.");
+            }
             isConnected = true;
             token = "proxy";
         } else if (!connectionChanged && sessionManager.isConnected()) {
@@ -501,10 +541,6 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             for (String removedPath : REMOVED_VOICE_UI_PATHS) {
                 userConfig.set(removedPath, null);
             }
-            String plasmoPublicHost = userConfig.getString(PLASMO_PUBLIC_HOST_PATH, "");
-            if (plasmoPublicHost.isBlank()) {
-                userConfig.set(PLASMO_PUBLIC_HOST_PATH, "0.0.0.0");
-            }
             userConfig.set(CONFIG_VERSION_PATH, CURRENT_CONFIG_VERSION);
             userConfig.save(configFile);
             Logger.infoLocalized("config.updated", "$from", Integer.toString(configVersion), "$to",
@@ -545,6 +581,10 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         if (!getConfig().getBoolean("config.adapters.plasmo.enabled", false)) {
             return;
         }
+        if (plasmoVoiceAdapter == null) {
+            Logger.error("Plasmo Voice bridge is enabled, but the PlasmoVoice plugin was not loaded. Restart after dependency installation.");
+            return;
+        }
 
         try {
             plasmoVoiceAdapter.start(new AdapterContext(Logger, getDataFolder().toPath(), sessionManager));
@@ -567,6 +607,10 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private void reloadSimpleVoiceChatAdapter() {
         stopSimpleVoiceChatAdapter();
         if (!getConfig().getBoolean("config.adapters.simple-voice-chat.enabled", false)) {
+            return;
+        }
+        if (simpleVoiceChatAdapter == null) {
+            Logger.error("Simple Voice Chat bridge is enabled, but the voicechat plugin was not loaded. Restart after dependency installation.");
             return;
         }
 

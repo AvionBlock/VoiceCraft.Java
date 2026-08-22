@@ -10,6 +10,8 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.command.permission.Permission;
+import net.minecraft.command.permission.PermissionLevel;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import team.avion.common.BaseVoiceCraftJava;
@@ -21,6 +23,8 @@ import team.avion.fabric.tasks.FabricPositionsTask;
 import team.avion.fabric.utils.FabricLogger;
 import team.avion.fabric.voicecraft.FabricVoiceCraftProcessManager;
 import team.avion.fabric.voicecraft.FabricVoiceCraftSessionManager;
+import team.avion.fabric.voicecraft.FabricVoiceEndpointRegistry;
+import team.avion.fabric.dependencies.FabricVoiceDependencyInstaller;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,6 +57,7 @@ public final class VoiceCraftJava implements ModInitializer, BaseVoiceCraftJava 
     private String lang = "en";
     private MinecraftServer server;
     private FabricVoiceCraftSessionManager sessionManager;
+    private FabricVoiceEndpointRegistry voiceEndpointRegistry;
     private FabricVoiceCraftProcessManager voiceCraftProcessManager;
     private FabricPositionsTask positionsTask;
     private volatile boolean reloadInProgress;
@@ -61,12 +66,40 @@ public final class VoiceCraftJava implements ModInitializer, BaseVoiceCraftJava 
         return instance;
     }
 
+    public MinecraftServer getServer() {
+        return server;
+    }
+
+    public FabricVoiceCraftSessionManager getSessionManager() {
+        return sessionManager;
+    }
+
+    public FabricConfig getConfig() {
+        return config;
+    }
+
+    public FabricVoiceEndpointRegistry getVoiceEndpointRegistry() {
+        return voiceEndpointRegistry;
+    }
+
     @Override
     public void onInitialize() {
         instance = this;
         ensureLocalizedConfigExists();
         reloadConfig();
+        migrateConfig();
+        new FabricVoiceDependencyInstaller(this).installMissingEnabledDependencies();
         sessionManager = new FabricVoiceCraftSessionManager(this);
+        voiceEndpointRegistry = new FabricVoiceEndpointRegistry(this);
+        if (FabricLoader.getInstance().isModLoaded("plasmovoice")
+                && config.getBoolean("config.adapters.plasmo.enabled", false)) {
+            try {
+                Class.forName("team.avion.fabric.adapters.plasmo.FabricPlasmoBootstrap")
+                        .getMethod("load").invoke(null);
+            } catch (ReflectiveOperationException exception) {
+                Logger.error("Failed to load Plasmo Voice bridge: " + exception.getMessage());
+            }
+        }
         voiceCraftProcessManager = new FabricVoiceCraftProcessManager(this);
         positionsTask = new FabricPositionsTask(this);
 
@@ -318,14 +351,6 @@ public final class VoiceCraftJava implements ModInitializer, BaseVoiceCraftJava 
         return dataFolder;
     }
 
-    public FabricConfig getConfig() {
-        return config;
-    }
-
-    public FabricVoiceCraftSessionManager getSessionManager() {
-        return sessionManager;
-    }
-
     public int getManagedVoicePort() {
         return config.getInt(MANAGED_VOICE_PORT_PATH, 1111);
     }
@@ -369,29 +394,29 @@ public final class VoiceCraftJava implements ModInitializer, BaseVoiceCraftJava 
     private void registerCommands() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
                 CommandManager.literal("voice")
-                        .requires(source -> source.hasPermissionLevel(0))
+                        .requires(source -> hasPermissionLevel(source, 0))
                         .then(CommandManager.literal("reload")
-                                .requires(source -> source.hasPermissionLevel(2))
+                                .requires(source -> hasPermissionLevel(source, 2))
                                 .executes(context -> {
                                     reload();
                                     send(context.getSource(), "commands.reload");
                                     return 1;
                                 }))
                         .then(CommandManager.literal("disconnect")
-                                .requires(source -> source.hasPermissionLevel(2))
+                                .requires(source -> hasPermissionLevel(source, 2))
                                 .executes(context -> {
                                     disconnect("Disconnection Request.");
                                     send(context.getSource(), "commands.disconnect.disconnecting");
                                     return 1;
                                 }))
                         .then(CommandManager.literal("reconnect")
-                                .requires(source -> source.hasPermissionLevel(2))
+                                .requires(source -> hasPermissionLevel(source, 2))
                                 .executes(context -> reconnectCommand(context.getSource(), false))
                                 .then(CommandManager.argument("force", StringArgumentType.word())
                                         .executes(context -> reconnectCommand(context.getSource(),
                                                 Boolean.parseBoolean(StringArgumentType.getString(context, "force"))))))
                         .then(CommandManager.literal("connect")
-                                .requires(source -> source.hasPermissionLevel(2))
+                                .requires(source -> hasPermissionLevel(source, 2))
                                 .then(CommandManager.argument("host", StringArgumentType.word())
                                         .then(CommandManager.argument("port", IntegerArgumentType.integer(1, 65535))
                                                 .then(CommandManager.argument("token", StringArgumentType.word())
@@ -414,7 +439,7 @@ public final class VoiceCraftJava implements ModInitializer, BaseVoiceCraftJava 
                                             return bound ? 1 : 0;
                                         })))
                         .then(CommandManager.literal("bindfake")
-                                .requires(source -> source.hasPermissionLevel(2))
+                                .requires(source -> hasPermissionLevel(source, 2))
                                 .then(CommandManager.argument("key", IntegerArgumentType.integer(0))
                                         .then(CommandManager.argument("name", StringArgumentType.word())
                                                 .executes(context -> {
@@ -426,6 +451,25 @@ public final class VoiceCraftJava implements ModInitializer, BaseVoiceCraftJava 
                                                             : "commands.bind.failed");
                                                     return bound ? 1 : 0;
                                                 }))))));
+    }
+
+    private void migrateConfig() {
+        if (config.getInt("config-version", 0) >= 2) return;
+        try (InputStream input = openResource("config/en.yml")) {
+            if (input == null) throw new IOException("Missing Fabric config template");
+            String template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("__GENERATED_LOGIN_TOKEN__", UUID.randomUUID().toString());
+            config.mergeMissingFrom(template);
+            config.set("config-version", 2);
+            config.save();
+            reloadConfig();
+        } catch (IOException exception) {
+            Logger.error("Failed to migrate Fabric config: " + exception.getMessage());
+        }
+    }
+
+    private static boolean hasPermissionLevel(ServerCommandSource source, int level) {
+        return source.getPermissions().hasPermission(new Permission.Level(PermissionLevel.fromLevel(level)));
     }
 
     private int reconnectCommand(ServerCommandSource source, boolean force) {

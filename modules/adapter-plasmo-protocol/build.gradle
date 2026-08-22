@@ -1,5 +1,0 @@
-description = 'Plasmo Voice wire protocol support for VoiceCraft.Java adapters.'
-
-dependencies {
-    api project(':adapter-api')
-}

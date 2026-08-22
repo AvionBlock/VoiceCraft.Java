@@ -37,6 +37,14 @@ allprojects {
             name = "Bungeecord"
             url = uri("https://oss.sonatype.org/content/repositories/snapshots")
         }
+        maven {
+            name = "MaxHenkel"
+            url = uri("https://maven.maxhenkel.de/repository/public")
+        }
+        maven {
+            name = "PlasmoVerse"
+            url = uri("https://repo.plasmoverse.com/releases")
+        }
     }
 }
 

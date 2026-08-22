@@ -11,6 +11,8 @@ import java.util.OptionalInt;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -19,6 +21,10 @@ import org.bukkit.entity.Player;
 
 import team.avion.adapter.VoiceCraftAudioBridge;
 import team.avion.adapter.VoiceCraftAudioSink;
+import team.avion.adapter.VoiceAudioAudience;
+import team.avion.adapter.VoiceAudioFrame;
+import team.avion.adapter.VoiceAudioSource;
+import team.avion.adapter.VoiceAudioSourceType;
 import team.avion.adapter.VoiceCraftEntityIdentity;
 import team.avion.adapter.VoiceCraftIdentityListener;
 import team.avion.adapter.VoiceCraftPlayerState;
@@ -76,6 +82,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private final Map<Integer, VoiceCraftEntityIdentity> entityIdentitiesById = new HashMap<>();
     private final Map<UUID, VoiceCraftPlayerState> playerVoiceStatesById = new HashMap<>();
     private final Map<Integer, NativeVoiceState> nativeVoiceStatesByEntityId = new HashMap<>();
+    private final Map<UUID, Integer> virtualEntitiesByStreamId = new HashMap<>();
 
     private String host = "";
     private int port;
@@ -88,6 +95,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     private final List<VoiceCraftIdentityListener> identityListeners = new CopyOnWriteArrayList<>();
     private final List<VoiceCraftPlayerStateListener> playerStateListeners = new CopyOnWriteArrayList<>();
     private final LinkedBlockingQueue<PendingAudioFrame> audioQueue = new LinkedBlockingQueue<>();
+    private final Map<AudioFrameKey, ConcurrentLinkedQueue<VoiceAudioFrame>> routedFrameMetadata = new ConcurrentHashMap<>();
     private final AtomicBoolean audioWorkerRunning = new AtomicBoolean(false);
     private Thread audioWorkerThread;
 
@@ -270,6 +278,71 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         packet.RequestId = java.util.UUID.randomUUID().toString();
         packet.Id = boundEntity.entityId();
         processPackets(client.exchange(List.of(packet)));
+    }
+
+    @Override
+    public void sendAudioFrame(VoiceAudioFrame frame) {
+        if (!client.isConnected() || frame.opusFrame().length == 0) {
+            return;
+        }
+        AudioFrameKey key = new AudioFrameKey(frame.source().voiceCraftEntityId(), frame.timestamp());
+        routedFrameMetadata.computeIfAbsent(key, ignored -> new ConcurrentLinkedQueue<>()).offer(frame);
+        sendEntityAudio(frame.source().voiceCraftEntityId(), frame.timestamp(), frame.loudness(), frame.opusFrame());
+    }
+
+    /** Creates a backend entity for an add-on source so protocol 1.7 can route it like a positioned entity. */
+    public synchronized Optional<VoiceAudioSource> getOrCreateVirtualEntity(VoiceAudioSource source,
+            String originAdapter) {
+        if (source.voiceCraftEntityId() > 0) {
+            return Optional.of(source);
+        }
+        Integer existing = virtualEntitiesByStreamId.get(source.streamId());
+        if (existing != null) {
+            return Optional.of(source.withVoiceCraftEntityId(existing));
+        }
+        if (!client.isConnected()) {
+            return Optional.empty();
+        }
+
+        String requestId = UUID.randomUUID().toString();
+        CreateEntityRequestPacket request = new CreateEntityRequestPacket();
+        request.RequestId = requestId;
+        for (McApiPacket response : client.exchange(List.of(request))) {
+            if (!(response instanceof CreateEntityResponsePacket created) || !requestId.equals(created.RequestId)) {
+                processPackets(List.of(response));
+                continue;
+            }
+            if (created.ResponseCode != CreateEntityResponseCode.OK) {
+                return Optional.empty();
+            }
+            int entityId = created.Id;
+            List<McApiPacket> packets = new ArrayList<>();
+            packets.add(stringPacket(new SetEntityNameRequestPacket(), entityId,
+                    source.category().isBlank() ? "Voice add-on" : source.category()));
+            packets.add(stringPacket(new SetEntityDescriptionRequestPacket(), entityId,
+                    "Bridged from " + originAdapter));
+            packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), entityId, source.worldId()));
+            packets.add(intPacket(new SetEntityEffectBitmaskRequestPacket(), entityId,
+                    source.type() == VoiceAudioSourceType.DIRECT || source.type() == VoiceAudioSourceType.BROADCAST
+                            ? 0 : getCurrentEffectBitmask()));
+            packets.add(vector3Packet(new SetEntityPositionRequestPacket(), entityId,
+                    new Vector3((float) source.x(), (float) source.y(), (float) source.z())));
+            processPackets(client.exchange(packets));
+            virtualEntitiesByStreamId.put(source.streamId(), entityId);
+            registerEntityIdentity(new VoiceCraftEntityIdentity(entityId, source.streamId(),
+                    source.category().isBlank() ? "Voice add-on" : source.category(), originAdapter));
+            return Optional.of(source.withVoiceCraftEntityId(entityId));
+        }
+        return Optional.empty();
+    }
+
+    /** Destroys only entities created for native transports, never an externally bound VoiceCraft client. */
+    public synchronized void destroyManagedEntityForPlayer(String playerName) {
+        BoundEntity boundEntity = boundEntitiesByPlayerName.get(playerName);
+        if (boundEntity == null || boundEntity.networkEntity()) {
+            return;
+        }
+        destroyEntityForPlayer(playerName);
     }
 
     @Override
@@ -581,6 +654,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
             audioWorkerThread = null;
         }
         audioQueue.clear();
+        routedFrameMetadata.clear();
     }
 
     private void runAudioWorker() {
@@ -626,8 +700,27 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         if (packet.Data == null || packet.Data.length == 0) {
             return;
         }
+        AudioFrameKey key = new AudioFrameKey(packet.Id, packet.Timestamp);
+        ConcurrentLinkedQueue<VoiceAudioFrame> queued = routedFrameMetadata.get(key);
+        VoiceAudioFrame frame = queued == null ? null : queued.poll();
+        if (queued != null && queued.isEmpty()) {
+            routedFrameMetadata.remove(key, queued);
+        }
+        if (frame == null) {
+            VoiceCraftEntityIdentity identity = entityIdentitiesById.get(packet.Id);
+            UUID playerId = identity == null ? null : identity.playerId();
+            VoiceAudioSource source = playerId == null
+                    ? new VoiceAudioSource(UUID.randomUUID(), VoiceAudioSourceType.ENTITY, packet.Id, null, null,
+                            "", 0D, 0D, 0D, proximityDistance, "", false)
+                    : VoiceAudioSource.player(packet.Id, playerId, proximityDistance);
+            frame = new VoiceAudioFrame(UUID.randomUUID(), "voicecraft", source, VoiceAudioAudience.PROXIMITY,
+                    Integer.toUnsignedLong(packet.Timestamp), packet.Timestamp, packet.FrameLoudness, packet.Data);
+        } else {
+            frame = new VoiceAudioFrame(frame.routeId(), frame.originAdapter(), frame.source(), frame.audience(),
+                    frame.sequenceNumber(), packet.Timestamp, packet.FrameLoudness, packet.Data);
+        }
         for (VoiceCraftAudioSink sink : audioSinks) {
-            sink.receiveEntityAudio(packet.Id, packet.Timestamp, packet.FrameLoudness, packet.Data);
+            sink.receiveAudioFrame(frame);
         }
     }
 
@@ -740,7 +833,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         List<McApiPacket> packets = new ArrayList<>();
         packets.add(stringPacket(new SetEntityNameRequestPacket(), entityId, player.getName()));
         packets.add(stringPacket(new SetEntityDescriptionRequestPacket(), entityId,
-                "Plasmo client " + player.getName()));
+                "Native voice client " + player.getName()));
         packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), entityId, getDimensionId(player)));
         packets.add(intPacket(new SetEntityEffectBitmaskRequestPacket(), entityId, getCurrentEffectBitmask()));
         packets.add(vector3Packet(new SetEntityPositionRequestPacket(), entityId,
@@ -781,6 +874,7 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         entityIdentitiesById.clear();
         playerVoiceStatesById.clear();
         nativeVoiceStatesByEntityId.clear();
+        virtualEntitiesByStreamId.clear();
         identities.forEach(this::notifyIdentityUnregistered);
         plugin.getPlayerBinds().clear();
     }
@@ -908,6 +1002,9 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     }
 
     private record PendingAudioFrame(int entityId, int timestamp, float loudness, byte[] opusFrame) {
+    }
+
+    private record AudioFrameKey(int entityId, int timestamp) {
     }
 
     private record NativeVoiceState(boolean muted, boolean deafened, boolean serverMuted, boolean serverDeafened) {

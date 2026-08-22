@@ -12,8 +12,6 @@ public final class ProxyMessageCodec {
     public static final String BIND_REQUEST = "BindRequest";
     public static final String UNBIND_REQUEST = "UnbindRequest";
     public static final String BIND_SYNC = "BindSync";
-    public static final String UDP_ROUTE_REGISTER = "UdpRouteRegister";
-    public static final String UDP_ROUTE_UNREGISTER = "UdpRouteUnregister";
 
     private ProxyMessageCodec() {
     }
@@ -97,37 +95,6 @@ public final class ProxyMessageCodec {
         });
     }
 
-    public static byte[] encodeUdpRouteRegister(String adapterId, String routeKey, int backendPort) {
-        return write(writer -> {
-            writer.writeUTF(UDP_ROUTE_REGISTER);
-            writer.writeUTF(adapterId);
-            writer.writeUTF(routeKey);
-            writer.writeInt(backendPort);
-        });
-    }
-
-    public static UdpRouteRegister decodeUdpRouteRegister(byte[] message) {
-        return read(message, reader -> {
-            expect(reader.readUTF(), UDP_ROUTE_REGISTER);
-            return new UdpRouteRegister(reader.readUTF(), reader.readUTF(), reader.readInt());
-        });
-    }
-
-    public static byte[] encodeUdpRouteUnregister(String adapterId, String routeKey) {
-        return write(writer -> {
-            writer.writeUTF(UDP_ROUTE_UNREGISTER);
-            writer.writeUTF(adapterId);
-            writer.writeUTF(routeKey);
-        });
-    }
-
-    public static UdpRouteUnregister decodeUdpRouteUnregister(byte[] message) {
-        return read(message, reader -> {
-            expect(reader.readUTF(), UDP_ROUTE_UNREGISTER);
-            return new UdpRouteUnregister(reader.readUTF(), reader.readUTF());
-        });
-    }
-
     public static String peekType(byte[] message) {
         return read(message, input -> input.readUTF());
     }
@@ -178,9 +145,4 @@ public final class ProxyMessageCodec {
     public record BindSync(String playerName, boolean bound) {
     }
 
-    public record UdpRouteRegister(String adapterId, String routeKey, int backendPort) {
-    }
-
-    public record UdpRouteUnregister(String adapterId, String routeKey) {
-    }
 }

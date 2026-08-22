@@ -18,11 +18,16 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
 
     implementation project(':core')
+    implementation project(':adapter-api')
+    modCompileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
+    modCompileOnly 'su.plo.voice.api:server:2.1.15'
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
     implementation 'com.google.code.gson:gson:2.13.2'
     implementation 'org.yaml:snakeyaml:2.4'
     implementation 'net.kyori:adventure-api:4.25.0'
 
     include project(':core')
+    include project(':adapter-api')
     include 'com.google.code.gson:gson:2.13.2'
     include 'org.yaml:snakeyaml:2.4'
     include 'net.kyori:adventure-api:4.25.0'

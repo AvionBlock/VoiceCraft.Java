@@ -1,4 +1,4 @@
-﻿config-version: 3 # DO NOT EDIT: used for automatic config migrations
+config-version: 4 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -21,15 +21,3 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # Positie-update-interval in ticks
-
-  adapters:
-    plasmo:
-      proxy:
-        enabled: false # Plasmo Voice UDP relay op deze proxy inschakelen
-        bind-host: "0.0.0.0" # UDP-bindadres voor Plasmo clients
-        port: 24454 # Publieke UDP relay-poort die Paper in public.port adverteert
-    simple-voice-chat:
-      proxy:
-        enabled: false # Simple Voice Chat UDP relay op deze proxy inschakelen
-        bind-host: "0.0.0.0" # UDP-bindadres voor Simple Voice Chat clients
-        port: 24455 # Publieke UDP relay-poort die Paper in public.port adverteert

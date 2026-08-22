@@ -1,4 +1,4 @@
-config-version: 7 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
+config-version: 8 # НЕ ТРОГАТЬ: используется для автоматических миграций конфига
 
 config:
   debug: false # Включить дополнительное логирование
@@ -9,24 +9,17 @@ config:
     enabled: false # Включить, если этот Paper-сервер стоит за Velocity/Bungee
 
   adapters:
+    client-priority: ["simple-voice-chat", "plasmo"] # Приоритет клиента, если у игрока установлены оба мода
+    managed-dependencies:
+      enabled: true # Скачивать недостающие официальные плагины с Modrinth; потребуется перезапуск
     plasmo:
-      enabled: false # Включить совместимость с клиентом Plasmo Voice
-      bind-host: "0.0.0.0" # UDP-адрес для Plasmo-клиентов
-      port: 24454 # UDP-порт для Plasmo-клиентов
-      public:
-        host: "0.0.0.0" # Plasmo использует Minecraft-хост при 0.0.0.0; за Velocity/Bungee укажите хост прокси
-        port: 0 # Порт для Plasmo клиентов; 0 использует UDP-порт выше, либо укажите proxy relay port
+      enabled: false # Подключить официальный Plasmo Voice к маршрутизации VoiceCraft
+      install:
+        enabled: true # Автоматически установить Plasmo Voice, если его нет
     simple-voice-chat:
-      enabled: false # Включить совместимость с клиентом Simple Voice Chat
-      bind-host: "0.0.0.0" # UDP-адрес для клиентов Simple Voice Chat
-      port: 24455 # UDP-порт для клиентов Simple Voice Chat
-      public:
-        host: "" # Voice host для клиентов; за Velocity/Bungee укажите хост прокси
-        port: 0 # Порт для клиентов; 0 использует UDP-порт выше, либо укажите proxy relay port
-      compatibility-version: 20 # Версия совместимости Simple Voice Chat
-      mtu-size: 1024 # Максимальный размер входящего Opus-пакета
-      keep-alive-ms: 1000 # Интервал UDP keep-alive
-      allow-recording: true # Сообщать клиентам, что запись разрешена
+      enabled: false # Подключить официальный Simple Voice Chat к маршрутизации VoiceCraft
+      install:
+        enabled: true # Автоматически установить Simple Voice Chat, если его нет
 
   voicecraft:
     transport:

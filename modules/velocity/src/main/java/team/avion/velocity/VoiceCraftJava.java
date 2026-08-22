@@ -34,7 +34,6 @@ import team.avion.common.config.ConfigTemplateWriter;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.common.localization.Language;
 import team.avion.proxy.VoiceCraftProxySessionManager;
-import team.avion.proxy.VoiceProxyUdpRelayManager;
 import team.avion.velocity.commands.VoiceCommand;
 import team.avion.velocity.config.VelocityYamlConfig;
 import team.avion.velocity.listeners.PlayerJoinHandler;
@@ -46,10 +45,11 @@ import team.avion.velocity.utils.VelocityLogger;
 @Plugin(id = "voicecraft-java", name = "VoiceCraft.Java", version = "0.0.0", description = "VoiceCraft bridge for Velocity", authors = { "0xAlpha" })
 public class VoiceCraftJava implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final int CURRENT_CONFIG_VERSION = 4;
     private static final String[] REMOVED_PLAYER_NOTIFICATION_PATHS = {
             "config.voice.send-bind-message",
-            "config.voice.send-disconnect-message"
+            "config.voice.send-disconnect-message",
+            "config.adapters"
     };
     private static final String TRANSPORT_HOST_PATH = "config.voicecraft.transport.host";
     private static final String TRANSPORT_PORT_PATH = "config.voicecraft.transport.port";
@@ -76,7 +76,6 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
     }
     private final @Getter PluginMessageHandler messageHandler = new PluginMessageHandler(this);
     private final @Getter VoiceCraftProxySessionManager sessionManager;
-    private final @Getter VoiceProxyUdpRelayManager udpRelayManager;
 
     private ScheduledTask taskRunner;
     private PositionsTask positionsTask;
@@ -89,7 +88,6 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
         this.proxy = proxy;
         this.dataFolder = dataDirectory.toFile();
         this.sessionManager = new VoiceCraftProxySessionManager(Logger);
-        this.udpRelayManager = new VoiceProxyUdpRelayManager(Logger);
 
         ensureLocalizedConfigExists();
         config = new VelocityYamlConfig(dataDirectory.resolve("config.yml"));
@@ -119,7 +117,6 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
 
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
-        udpRelayManager.close();
         sessionManager.close();
     }
 
@@ -158,7 +155,6 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
         }).repeat(positionTaskInterval * 50L, TimeUnit.MILLISECONDS).schedule();
 
         updateSettings(proximityDistance, proximityToggle, voiceEffects);
-        reloadUdpRelays();
     }
 
     @Override
@@ -338,17 +334,6 @@ public class VoiceCraftJava implements BaseVoiceCraftJava {
 
     public static VelocityYamlConfig getConfig() {
         return config;
-    }
-
-    private void reloadUdpRelays() {
-        udpRelayManager.configure(VoiceProxyUdpRelayManager.ADAPTER_PLASMO,
-                getConfig().getBoolean("config.adapters.plasmo.proxy.enabled", false),
-                getConfig().getString("config.adapters.plasmo.proxy.bind-host", "0.0.0.0"),
-                getConfig().getInt("config.adapters.plasmo.proxy.port", 24454));
-        udpRelayManager.configure(VoiceProxyUdpRelayManager.ADAPTER_SIMPLE_VOICE_CHAT,
-                getConfig().getBoolean("config.adapters.simple-voice-chat.proxy.enabled", false),
-                getConfig().getString("config.adapters.simple-voice-chat.proxy.bind-host", "0.0.0.0"),
-                getConfig().getInt("config.adapters.simple-voice-chat.proxy.port", 24455));
     }
 
     @Override

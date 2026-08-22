@@ -13,6 +13,14 @@ import java.util.UUID;
  */
 public interface VoiceCraftAudioBridge {
     /**
+     * Publishes a protocol-neutral frame. Implementations that still talk to VoiceCraft protocol
+     * 1.7 retain the richer metadata locally while forwarding its encoded entity payload.
+     */
+    default void sendAudioFrame(VoiceAudioFrame frame) {
+        sendEntityAudio(frame.source().voiceCraftEntityId(), frame.timestamp(), frame.loudness(), frame.opusFrame());
+    }
+
+    /**
      * Publishes a single Opus frame for a VoiceCraft entity.
      *
      * @param entityId the VoiceCraft entity id that produced the frame

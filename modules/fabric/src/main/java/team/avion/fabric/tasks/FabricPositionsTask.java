@@ -46,7 +46,7 @@ public final class FabricPositionsTask {
         return new ProxyPlayerSnapshot(
                 player.getUuid().toString(),
                 player.getName().getString(),
-                player.getWorld().getRegistryKey().getValue().toString(),
+                player.getEntityWorld().getRegistryKey().getValue().toString(),
                 player.getX(),
                 player.getEyeY(),
                 player.getZ(),

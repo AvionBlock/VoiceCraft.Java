@@ -36,16 +36,6 @@ class ProxyMessageCodecTest {
     }
 
     @Test
-    void udpRouteRegisterRoundTrips() {
-        ProxyMessageCodec.UdpRouteRegister decoded = ProxyMessageCodec.decodeUdpRouteRegister(
-                ProxyMessageCodec.encodeUdpRouteRegister("plasmo", "route-key", 24454));
-
-        assertEquals("plasmo", decoded.adapterId());
-        assertEquals("route-key", decoded.routeKey());
-        assertEquals(24454, decoded.backendPort());
-    }
-
-    @Test
     void malformedPayloadIsRejected() {
         assertThrows(IllegalArgumentException.class, () -> ProxyMessageCodec.peekType(new byte[] { 1, 2 }));
     }

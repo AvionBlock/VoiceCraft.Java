@@ -1,4 +1,4 @@
-﻿config-version: 3 # DO NOT EDIT: used for automatic config migrations
+config-version: 4 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false # 追加のデバッグログを有効化します
@@ -21,15 +21,3 @@ config:
     send-voicecraft-disconnect-message: true # Show a message when the VoiceCraft connection closes
     send-connection-lost-message: true # Show a message when the VoiceCraft connection is lost
     position-update-interval-ticks: 5 # 位置更新間隔（tick）
-
-  adapters:
-    plasmo:
-      proxy:
-        enabled: false # この proxy で Plasmo Voice UDP relay を有効化
-        bind-host: "0.0.0.0" # Plasmo clients 用 UDP bind address
-        port: 24454 # Paper public.port で広告する public UDP relay port
-    simple-voice-chat:
-      proxy:
-        enabled: false # この proxy で Simple Voice Chat UDP relay を有効化
-        bind-host: "0.0.0.0" # Simple Voice Chat clients 用 UDP bind address
-        port: 24455 # Paper public.port で広告する public UDP relay port

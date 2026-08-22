@@ -1,9 +1,22 @@
-config-version: 1
+config-version: 2
 
 config:
   debug: false
   lang: "system"
   auto-reconnect: true
+
+  adapters:
+    client-priority: ["simple-voice-chat", "plasmo"]
+    managed-dependencies:
+      enabled: true
+    simple-voice-chat:
+      enabled: false
+      install:
+        enabled: true
+    plasmo:
+      enabled: false
+      install:
+        enabled: true
 
   voicecraft:
     transport:

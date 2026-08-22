@@ -56,8 +56,12 @@ public class PositionsTask extends BukkitRunnable {
                 return;
             }
 
-            for (Player player : players) {
-                plugin.getMessageHandler().sendSnapshot(player, getPlayerSnapshot(player));
+            List<ProxyPlayerSnapshot> snapshots = players.stream().map(this::getPlayerSnapshot).toList();
+            for (int index = 0; index < players.size(); index++) {
+                plugin.getMessageHandler().sendSnapshot(players.get(index), snapshots.get(index));
+            }
+            if (plugin.getSessionManager().isConnected()) {
+                scheduleTick(snapshots);
             }
             return;
         }
@@ -88,7 +92,7 @@ public class PositionsTask extends BukkitRunnable {
                 boolean connected = tickSafely(snapshots);
                 runPluginTask(() -> {
                     networkOperationRunning.set(false);
-                    if (!connected && plugin.isConnected()) {
+                    if (!connected && plugin.isConnected() && !plugin.usesProxy) {
                         handleConnectionLost();
                     }
                 });

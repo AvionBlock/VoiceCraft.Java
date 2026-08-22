@@ -15,6 +15,9 @@
   "entrypoints": {
     "main": [
       "team.avion.fabric.VoiceCraftJava"
+    ],
+    "voicechat": [
+      "team.avion.fabric.adapters.simplevoicechat.FabricSimpleVoiceChatBridge"
     ]
   },
   "depends": {
@@ -22,5 +25,9 @@
     "fabric-api": ">=${fabricApiVersion}",
     "minecraft": "${minecraftDependency}",
     "java": ">=21"
+  },
+  "suggests": {
+    "voicechat": "*",
+    "plasmovoice": "*"
   }
 }

@@ -1,7 +1,5 @@
 package team.avion.bungeecord.listeners;
 
-import java.net.InetSocketAddress;
-
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.connection.Server;
 import net.md_5.bungee.api.config.ServerInfo;
@@ -64,19 +62,6 @@ public class PluginMessageHandler implements Listener {
                 ProxyMessageCodec.UnbindRequest unbindRequest = ProxyMessageCodec.decodeUnbindRequest(data);
                 plugin.handleProxyUnbindRequest(unbindRequest.playerId(), unbindRequest.playerName());
                 sendBindSync(unbindRequest.playerName(), false);
-            } else if (ProxyMessageCodec.UDP_ROUTE_REGISTER.equals(type)) {
-                ProxyMessageCodec.UdpRouteRegister route = ProxyMessageCodec.decodeUdpRouteRegister(data);
-                if (!(backend.getInfo().getSocketAddress() instanceof InetSocketAddress backendAddress)) {
-                    plugin.Logger.warnLocalized("proxy-message.route-non-ip", "$server", serverName);
-                    event.setCancelled(true);
-                    return;
-                }
-                String backendHost = backendAddress.getHostString();
-                plugin.getUdpRelayManager().registerRoute(route.adapterId(), route.routeKey(), backendHost,
-                        route.backendPort());
-            } else if (ProxyMessageCodec.UDP_ROUTE_UNREGISTER.equals(type)) {
-                ProxyMessageCodec.UdpRouteUnregister route = ProxyMessageCodec.decodeUdpRouteUnregister(data);
-                plugin.getUdpRelayManager().unregisterRoute(route.adapterId(), route.routeKey());
             } else {
                 plugin.Logger.debugLocalized("proxy-message.unknown-type-from", "$server", serverName, "$type", type);
             }

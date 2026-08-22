@@ -8,9 +8,10 @@ def pluginVersion = project.version.toString()
 dependencies {
     implementation project(':core')
     implementation project(':adapter-api')
-    implementation project(':adapter-plasmo-protocol')
-    implementation project(':adapter-simplevoicechat-protocol')
     implementation 'com.google.code.gson:gson:2.13.2'
+    compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
+    compileOnly 'su.plo.voice.api:server:2.1.15'
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly('org.projectlombok:lombok:1.18.44')
     annotationProcessor('org.projectlombok:lombok:1.18.44')

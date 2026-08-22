@@ -1,4 +1,4 @@
-config-version: 7 # DO NOT EDIT: used for automatic config migrations
+config-version: 8 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false                   # Enable additional debug logging
@@ -9,24 +9,17 @@ config:
     enabled: false               # Enable when this Paper server is behind Velocity/Bungee
 
   adapters:
+    client-priority: ["simple-voice-chat", "plasmo"] # Preferred client when a player has both mods
+    managed-dependencies:
+      enabled: true              # Download missing official server plugins from Modrinth; restart required
     plasmo:
-      enabled: false             # Enable Plasmo Voice client compatibility
-      bind-host: "0.0.0.0"       # UDP bind address for Plasmo clients
-      port: 24454                # UDP port for Plasmo clients
-      public:
-        host: "0.0.0.0"          # Plasmo uses the Minecraft connection host for 0.0.0.0; set the proxy host behind Velocity/Bungee
-        port: 0                  # Port sent to Plasmo clients; 0 uses the UDP port above, or set proxy relay port
+      enabled: false             # Bridge the official Plasmo Voice plugin through VoiceCraft
+      install:
+        enabled: true            # Install Plasmo Voice automatically when missing
     simple-voice-chat:
-      enabled: false             # Enable Simple Voice Chat client compatibility
-      bind-host: "0.0.0.0"       # UDP bind address for Simple Voice Chat clients
-      port: 24455                # UDP port for Simple Voice Chat clients
-      public:
-        host: ""                 # Voice host sent to clients; use the proxy host behind Velocity/Bungee
-        port: 0                  # Port sent to clients; 0 uses the UDP port above, or set proxy relay port
-      compatibility-version: 20  # Simple Voice Chat compatibility version
-      mtu-size: 1024             # Maximum incoming Opus payload size
-      keep-alive-ms: 1000        # UDP keep-alive interval
-      allow-recording: true      # Tell clients whether recording is allowed
+      enabled: false             # Bridge the official Simple Voice Chat plugin through VoiceCraft
+      install:
+        enabled: true            # Install Simple Voice Chat automatically when missing
 
   voicecraft:
     transport:

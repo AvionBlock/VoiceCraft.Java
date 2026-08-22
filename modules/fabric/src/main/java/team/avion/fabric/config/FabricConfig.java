@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 
 public final class FabricConfig {
     private final Path path;
@@ -68,6 +69,12 @@ public final class FabricConfig {
         return value instanceof String string ? string : fallback;
     }
 
+    public List<String> getStringList(String key) {
+        Object value = get(key);
+        if (!(value instanceof List<?> list)) return List.of();
+        return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
+    }
+
     public void set(String key, Object value) {
         String[] parts = key.split("\\.");
         Map<String, Object> current = root;
@@ -84,6 +91,24 @@ public final class FabricConfig {
             }
         }
         current.put(parts[parts.length - 1], value);
+    }
+
+    public void mergeMissingFrom(String yamlText) {
+        Object loaded = yaml.load(yamlText);
+        if (loaded instanceof Map<?, ?> map) mergeMissing(root, toStringMap(map));
+    }
+
+    private static void mergeMissing(Map<String, Object> target, Map<String, Object> defaults) {
+        for (Map.Entry<String, Object> entry : defaults.entrySet()) {
+            Object current = target.get(entry.getKey());
+            if (current == null) {
+                target.put(entry.getKey(), entry.getValue());
+            } else if (current instanceof Map<?, ?> currentMap && entry.getValue() instanceof Map<?, ?> defaultMap) {
+                Map<String, Object> normalized = toStringMap(currentMap);
+                target.put(entry.getKey(), normalized);
+                mergeMissing(normalized, toStringMap(defaultMap));
+            }
+        }
     }
 
     private Object get(String key) {

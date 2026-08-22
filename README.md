@@ -71,17 +71,17 @@ This is the primary path for players who cannot use Java voice mods, including B
 
 ### Simple Voice Chat and Plasmo Voice Flow
 
-On Paper, VoiceCraft.Java can act as a compatibility server for Java voice mods.
+On Paper, VoiceCraft.Java bridges the official server plugins for Java voice mods.
 
 ```text
-Simple Voice Chat client -> VoiceCraft.Java Paper adapter -> VoiceCraft audio bridge
-Plasmo Voice client       -> VoiceCraft.Java Paper adapter -> VoiceCraft audio bridge
-VoiceCraft client         -> VoiceCraft backend            -> VoiceCraft audio bridge
+Simple Voice Chat client -> official SVC plugin -> VoiceCraft.Java bridge -> VoiceCraft Server
+Plasmo Voice client       -> official Plasmo     -> VoiceCraft.Java bridge -> VoiceCraft Server
+VoiceCraft client         ----------------------------------> VoiceCraft Server
 ```
 
-The adapters speak the client protocols, manage UDP sessions, and pass Opus frames into the shared VoiceCraft audio bridge. Audio coming back from VoiceCraft is fanned out to the registered adapters, so players on different clients can participate in the same conversation.
+The official plugins own client handshakes, UDP transport and add-on APIs. VoiceCraft.Java captures their final server-side audio events and passes Opus frames to VoiceCraft Server, which remains the authoritative cross-client router. Audio coming back is injected through the official APIs, so players on different clients participate in the same conversation.
 
-The shared compatibility contract covers proximity audio, identity, speaking lifecycle, and player voice state. Client-exclusive features such as private Simple Voice Chat groups remain native to their own ecosystem and are intentionally not cross-translated. Do not install the original Simple Voice Chat or Plasmo Voice server plugin on the same Paper instance when the corresponding VoiceCraft.Java adapter owns its ports.
+The shared contract preserves player, entity, positional, direct and broadcast sources plus recipient selection. Enable a bridge to let VoiceCraft.Java install the missing official plugin from Modrinth; a server restart is required after installation. VoiceCraft.Java no longer emulates either wire protocol.
 
 ## Runtime Modes
 
@@ -105,22 +105,23 @@ Use this for networks with multiple backend servers.
 
 Install VoiceCraft.Java on every Paper backend and on the proxy. The proxy owns the VoiceCraft connection, while Paper backends send player snapshots and bind/unbind requests through the `voicecraft-java:main` plugin channel.
 
-Simple Voice Chat and Plasmo Voice audio stays on UDP in proxy mode. Paper registers voice routes through `voicecraft-java:main`, while Velocity/BungeeCord exposes public UDP relay ports and forwards raw voice datagrams to the current backend Paper adapter.
+Simple Voice Chat and Plasmo Voice keep using their own official proxy/network setup. VoiceCraft.Java no longer exposes raw UDP relays on Velocity or BungeeCord.
 
 ## Platform Support
 
 | Platform | Role |
 | --- | --- |
-| Paper | Direct runtime, backend runtime, managed VoiceCraft Server process, Simple Voice Chat adapter, Plasmo Voice adapter |
-| Velocity | Proxy runtime, central VoiceCraft connection, Simple Voice Chat / Plasmo UDP relay |
-| BungeeCord | Proxy runtime, central VoiceCraft connection, Simple Voice Chat / Plasmo UDP relay |
+| Paper | Direct/backend runtime, managed VoiceCraft Server process, native SVC and Plasmo bridges |
+| Fabric | Server runtime, managed VoiceCraft Server process, native SVC and Plasmo mod bridges |
+| Velocity | Proxy runtime and central VoiceCraft connection |
+| BungeeCord | Proxy runtime and central VoiceCraft connection |
 
 ## Requirements
 
 - Java 21.
-- Paper, Velocity, or BungeeCord.
-- VoiceCraft Server 1.7 backend, unless Paper managed runtime is enabled.
-- Reachable UDP ports for enabled Simple Voice Chat or Plasmo Voice adapters.
+- Paper, Fabric, Velocity, or BungeeCord.
+- VoiceCraft Server 1.7 backend, unless the managed runtime is enabled.
+- The official Simple Voice Chat and/or Plasmo Voice server plugin for enabled bridges (managed installation is available).
 
 The project is currently built against:
 
@@ -193,27 +194,6 @@ config:
 
 The proxy plugin owns the VoiceCraft connection for the whole network.
 
-### Proxy UDP Relay
-
-Enable these on Velocity or BungeeCord when Paper backends advertise the proxy as the public Plasmo/Simple Voice Chat endpoint:
-
-```yaml
-config:
-  adapters:
-    plasmo:
-      proxy:
-        enabled: true
-        bind-host: "0.0.0.0"
-        port: 24454
-    simple-voice-chat:
-      proxy:
-        enabled: true
-        bind-host: "0.0.0.0"
-        port: 24455
-```
-
-For proxy networks, set the Paper adapter `public.host` and `public.port` to the proxy address and relay port. The Paper adapter still owns the protocol session; the proxy only routes raw UDP packets to the backend that registered the route.
-
 ### Voice Settings
 
 ```yaml
@@ -237,39 +217,25 @@ config:
 
 The vanilla overlay uses invisible-by-default armor stands instead of display entities. A status is shown only when both the viewer and the target lack SVC/Plasmo, preventing it from overlapping either mod's native indicators. Symbols, colors, height, update interval, speaking hold time, and view distance are configurable.
 
-### Simple Voice Chat Adapter
+### Native Voice Bridges
 
 ```yaml
 config:
   adapters:
+    client-priority: ["simple-voice-chat", "plasmo"]
+    managed-dependencies:
+      enabled: true
     simple-voice-chat:
       enabled: true
-      bind-host: "0.0.0.0"
-      port: 24455
-      public:
-        host: ""
-        port: 0
-      compatibility-version: 20
-      mtu-size: 1024
-      keep-alive-ms: 1000
-      allow-recording: true
-```
-
-### Plasmo Voice Adapter
-
-```yaml
-config:
-  adapters:
+      install:
+        enabled: true
     plasmo:
       enabled: true
-      bind-host: "0.0.0.0"
-      port: 24454
-      public:
-        host: "0.0.0.0"
-        port: 0
+      install:
+        enabled: true
 ```
 
-`bind-host` controls the local socket. `public.host` is sent to the Plasmo client; the default `0.0.0.0` is intentionally preserved for direct Paper compatibility. In proxy mode, replace it with the proxy's reachable address and set `public.port` to the relay port.
+When both client mods are present, `client-priority` selects one output transport and prevents duplicate audio. On Paper dependencies are staged in `plugins/`; on Fabric they are staged in `mods/`. A restart activates newly installed dependencies. The official plugins/mods retain ownership of their ports and transport configuration.
 
 ## Commands
 
@@ -288,9 +254,7 @@ config:
 modules/
   core/                             Shared VoiceCraft protocol, session, proxy, config, localization code
   adapter-api/                      Shared adapter contracts for audio and entity identity
-  adapter-simplevoicechat-protocol/ Simple Voice Chat packet/session protocol support
-  adapter-plasmo-protocol/          Plasmo Voice packet/session protocol support
-  paper/                            Paper plugin, managed runtime, adapters, backend mode
+  paper/                            Paper plugin, managed runtime, native API bridges, backend mode
   velocity/                         Velocity proxy plugin
   bungeecord/                       BungeeCord proxy plugin
 ```

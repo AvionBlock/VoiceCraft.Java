@@ -2,6 +2,8 @@
 
 [English](README.md) | [Русский](README.ru.md) | [Nederlands](README.nl.md) | [日本語](README.ja.md)
 
+> **2.0 architecture note:** SVC/Plasmo protocol emulation and proxy UDP relays were removed. VoiceCraft.Java now uses the official server plugins and their native APIs; see the English or Russian README for the current bridge configuration.
+
 **VoiceCraft.Java — Java と Bedrock 上の VoiceCraft、Simple Voice Chat、Plasmo Voice をつなぐ究極の cross-client proximity voice chat プラグイン。**
 
 VoiceCraft.Java は、これらすべての client を Java Minecraft サーバー上の 1 つの共有ボイス空間に統合する相互運用プラグインです。
@@ -288,8 +290,6 @@ config:
 modules/
   core/                             VoiceCraft protocol、session、proxy、config、localization の共有コード
   adapter-api/                      audio と entity identity 用の共有 adapter contract
-  adapter-simplevoicechat-protocol/ Simple Voice Chat packet/session protocol support
-  adapter-plasmo-protocol/          Plasmo Voice packet/session protocol support
   paper/                            Paper plugin、managed runtime、adapters、backend mode
   velocity/                         Velocity proxy plugin
   bungeecord/                       BungeeCord proxy plugin

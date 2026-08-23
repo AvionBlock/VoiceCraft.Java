@@ -1,5 +1,6 @@
 package team.avion.fabric;
 
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
@@ -22,16 +23,28 @@ import java.lang.reflect.Method;
 @Mod("voicecraft_java")
 public final class VoiceCraftJava extends AbstractVoiceCraftMod {
     private static VoiceCraftJava instance;
+    private MinecraftServer minecraftServer;
 
     public VoiceCraftJava() {
         super(FMLPaths.CONFIGDIR.get().resolve("voicecraft-java"), new FabricLogger());
         instance = this;
         initializeRuntime();
-        ServerStartedEvent.BUS.addListener(event -> serverStarted(event.getServer()));
-        ServerStoppingEvent.BUS.addListener(event -> serverStopping());
+        ServerStartedEvent.BUS.addListener(event -> {
+            minecraftServer = event.getServer();
+            serverStarted(minecraftServer);
+        });
+        ServerStoppingEvent.BUS.addListener(event -> {
+            serverStopping();
+            minecraftServer = null;
+        });
         RegisterCommandsEvent.BUS.addListener(event -> ModCommandRegistrar.register(event.getDispatcher(), this,
                 (source, permission, level) -> ModPermissions.isOperator(source, level)));
-        TickEvent.ServerTickEvent.Post.BUS.addListener(event -> serverTick(event.server()));
+        TickEvent.ServerTickEvent.Post.BUS.addListener(event -> {
+            MinecraftServer server = minecraftServer;
+            if (server != null) {
+                serverTick(server);
+            }
+        });
     }
 
     public static VoiceCraftJava getInstance() { return instance; }

@@ -20,7 +20,7 @@ def targetJavaVersion = (selectedTarget.java as Number).intValue()
 def simpleVoiceChatAvailable = selectedTarget.simpleVoiceChat as boolean
 def plasmoVoiceAvailable = selectedTarget.plasmoVoice as boolean
 def gsonVersion = minecraftVersion == '1.21.1' ? '2.10.1' :
-        (minecraftVersion in ['1.21.4', '1.21.5', '1.21.6', '1.21.8'] ? '2.11.0' : '2.13.2')
+        (minecraftVersion in ['1.21.4', '1.21.5', '1.21.6', '1.21.8', '1.21.10'] ? '2.11.0' : '2.13.2')
 def generatedSharedSources = layout.buildDirectory.dir('generated/shared-mod-sources')
 
 java {

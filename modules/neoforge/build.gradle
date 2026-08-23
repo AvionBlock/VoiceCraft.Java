@@ -1,0 +1,117 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.140'
+    id 'com.gradleup.shadow' version '9.4.3'
+}
+
+import groovy.json.JsonSlurper
+
+description = 'NeoForge adapter for VoiceCraft.Java.'
+def targetCatalog = new JsonSlurper().parse(rootProject.file('gradle/voice-targets.json'))
+def globalTargetName = providers.gradleProperty('voiceTarget').orNull
+def requestedTargetName = providers.gradleProperty('neoForgeTarget').orNull ?:
+        (targetCatalog.any { it.name == globalTargetName && it.loader == 'neoforge' } ? globalTargetName : '1.21.11-neoforge')
+def selectedTarget = targetCatalog.find { it.name == requestedTargetName }
+if (selectedTarget == null || selectedTarget.loader != 'neoforge') {
+    throw new GradleException("Unknown NeoForge VoiceCraft target '${requestedTargetName}'.")
+}
+def minecraftVersion = selectedTarget.minecraft.toString()
+def neoForgeVersion = selectedTarget.neoforge.toString()
+def targetJavaVersion = (selectedTarget.java as Number).intValue()
+def simpleVoiceChatAvailable = selectedTarget.simpleVoiceChat as boolean
+def plasmoVoiceAvailable = selectedTarget.plasmoVoice as boolean
+def gsonVersion = minecraftVersion == '1.21.1' ? '2.10.1' :
+        (minecraftVersion in ['1.21.4', '1.21.5', '1.21.6', '1.21.8'] ? '2.11.0' : '2.13.2')
+def generatedSharedSources = layout.buildDirectory.dir('generated/shared-mod-sources')
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    if (targetJavaVersion > 21) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+neoForge {
+    version = neoForgeVersion
+}
+
+configurations {
+    shade
+    implementation.extendsFrom shade
+}
+
+sourceSets.main.java.setSrcDirs([
+        rootProject.file('modules/mod-runtime/src/main/java'),
+        generatedSharedSources,
+        file('src/main/java')
+])
+
+tasks.register('syncSharedModSources', Sync) {
+    from(rootProject.file('modules/fabric/src/main/java')) {
+        exclude 'team/avion/fabric/VoiceCraftJava.java'
+        exclude 'team/avion/fabric/FabricNativeVoiceConfigPreLaunch.java'
+        exclude 'team/avion/fabric/dependencies/**'
+    }
+    into generatedSharedSources
+}
+
+tasks.withType(JavaCompile).configureEach {
+    dependsOn tasks.named('syncSharedModSources')
+    options.release = targetJavaVersion
+}
+
+tasks.named('sourcesJar') {
+    dependsOn tasks.named('syncSharedModSources')
+}
+
+dependencies {
+    implementation project(':core')
+    implementation project(':adapter-api')
+    compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
+    compileOnly 'su.plo.voice.api:server:2.1.15'
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
+    shade "com.google.code.gson:gson:${gsonVersion}"
+    shade 'org.yaml:snakeyaml:2.4'
+    shade 'net.kyori:adventure-api:4.25.0'
+}
+
+processResources {
+    from(rootProject.file('modules/fabric/src/main/resources/config')) { into 'config' }
+    inputs.properties([
+            version: project.version,
+            minecraftDependency: selectedTarget.minecraftDependency,
+            targetName: requestedTargetName,
+            minecraftVersion: minecraftVersion,
+            simpleVoiceChatAvailable: simpleVoiceChatAvailable,
+            plasmoVoiceAvailable: plasmoVoiceAvailable
+    ])
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand(version: project.version, minecraftDependency: selectedTarget.minecraftDependency)
+    }
+    filesMatching('voicecraft-target.properties') {
+        expand(targetName: requestedTargetName, minecraftVersion: minecraftVersion,
+                simpleVoiceChatAvailable: simpleVoiceChatAvailable,
+                plasmoVoiceAvailable: plasmoVoiceAvailable)
+    }
+}
+
+jar {
+    archiveBaseName.set("${rootProject.ext.pluginName}-neoforge")
+    archiveClassifier.set("${minecraftVersion}-thin")
+}
+
+shadowJar {
+    archiveBaseName.set("${rootProject.ext.pluginName}-neoforge")
+    archiveClassifier.set(minecraftVersion)
+    configurations = [project.configurations.shade]
+    from project(':core').sourceSets.main.output
+    from project(':adapter-api').sourceSets.main.output
+}
+
+build.dependsOn shadowJar
+
+tasks.register('printNeoForgeTarget') {
+    doLast {
+        println("NeoForge target ${requestedTargetName}: Minecraft ${minecraftVersion}, NeoForge ${neoForgeVersion}, Java ${targetJavaVersion}, SVC=${simpleVoiceChatAvailable}, Plasmo=${plasmoVoiceAvailable}")
+    }
+}

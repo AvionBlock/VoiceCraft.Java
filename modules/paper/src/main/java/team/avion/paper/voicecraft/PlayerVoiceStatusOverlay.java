@@ -281,7 +281,8 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
     }
 
     private PlayerVoiceStatus statusFor(Player player, long now) {
-        boolean connected = plugin.getPlayerBinds().getOrDefault(player.getName(), false);
+        boolean connected = plugin.getVoiceEndpointRegistry().isConnected(player.getUniqueId())
+                || plugin.getPlayerBinds().getOrDefault(player.getName(), false);
         VoiceCraftPlayerState state = plugin.getSessionManager().playerVoiceState(player.getUniqueId())
                 .orElse(null);
         boolean speaking = false;

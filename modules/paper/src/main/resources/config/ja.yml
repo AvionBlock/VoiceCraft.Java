@@ -1,4 +1,4 @@
-config-version: 8 # 編集しないでください: configの自動移行に使用されます
+config-version: 9 # 編集しないでください: configの自動移行に使用されます
 
 config:
   debug: false # 追加のデバッグログを有効化します
@@ -12,6 +12,18 @@ config:
     client-priority: ["simple-voice-chat", "plasmo"]
     managed-dependencies:
       enabled: true
+    native-configs:
+      owner: "voicecraft"
+      simple-voice-chat:
+        bind-address: ""
+        bind-port: 24454
+        advertised-host: ""
+        advertised-port: 24454
+      plasmo:
+        bind-address: "0.0.0.0"
+        bind-port: 0
+        advertised-host: "0.0.0.0"
+        advertised-port: 0
     plasmo:
       enabled: false # 公式 Plasmo Voice を VoiceCraft に接続
       install:
@@ -27,7 +39,7 @@ config:
       port: 9050 # VoiceCraft の TCP ポート
       login-token: "__GENERATED_LOGIN_TOKEN__" # VoiceCraft の LoginToken
     voice:
-      port: 1111 # Managed VoiceCraft voice port
+      port: 9050 # VoiceCraft の公開 UDP ボイスポート
     auto-start: true # 管理対象 VoiceCraft を自動起動します
     shutdown-on-disable: true # プラグイン停止時に VoiceCraft を終了します
     invariant-globalization: true # システム ICU なしで .NET を実行します

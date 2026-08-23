@@ -66,8 +66,8 @@ final class VoiceCraftReleaseArchive {
         try (var stream = Files.list(stagingDirectory)) {
             children = stream.toList();
         }
-        if (children.size() == 1 && Files.isDirectory(children.getFirst())) {
-            return children.getFirst();
+        if (children.size() == 1 && Files.isDirectory(children.get(0))) {
+            return children.get(0);
         }
         return stagingDirectory;
     }

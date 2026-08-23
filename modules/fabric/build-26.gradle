@@ -1,0 +1,99 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT'
+    id 'com.gradleup.shadow' version '9.4.3'
+}
+
+import groovy.json.JsonSlurper
+
+description = 'Fabric adapter for unobfuscated Minecraft 26.x.'
+def targetCatalog = new JsonSlurper().parse(rootProject.file('gradle/voice-targets.json'))
+def globalTargetName = providers.gradleProperty('voiceTarget').orNull
+def requestedTargetName = providers.gradleProperty('fabricTarget').orNull ?:
+        (targetCatalog.any { it.name == globalTargetName && it.loader == 'fabric' } ? globalTargetName : '26.2-fabric')
+def selectedTarget = targetCatalog.find { it.name == requestedTargetName }
+if (selectedTarget == null || selectedTarget.loader != 'fabric' || !requestedTargetName.startsWith('26.')) {
+    throw new GradleException("Unknown Minecraft 26.x Fabric target '${requestedTargetName}'.")
+}
+def minecraftVersion = selectedTarget.minecraft.toString()
+def targetJavaVersion = (selectedTarget.java as Number).intValue()
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+}
+
+sourceSets.main.java.srcDir(rootProject.file('modules/mod-runtime/src/main/java'))
+
+configurations {
+    shade
+    implementation.extendsFrom shade
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = targetJavaVersion
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    implementation "net.fabricmc:fabric-loader:${selectedTarget.fabricLoader}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${selectedTarget.fabricApi}"
+    shade "me.lucko:fabric-permissions-api:${selectedTarget.fabricPermissions}"
+
+    implementation project(':core')
+    implementation project(':adapter-api')
+    compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
+    compileOnly 'su.plo.voice.api:server:2.1.15'
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
+    shade 'com.google.code.gson:gson:2.13.2'
+    shade 'org.yaml:snakeyaml:2.4'
+    shade 'net.kyori:adventure-api:4.25.0'
+}
+
+processResources {
+    inputs.properties([
+            version: project.version,
+            description: rootProject.description,
+            minecraftDependency: selectedTarget.minecraftDependency,
+            fabricLoaderVersion: selectedTarget.fabricLoader,
+            fabricApiVersion: selectedTarget.fabricApi,
+            targetJavaVersion: targetJavaVersion,
+            targetName: requestedTargetName,
+            minecraftVersion: minecraftVersion,
+            simpleVoiceChatAvailable: selectedTarget.simpleVoiceChat,
+            plasmoVoiceAvailable: selectedTarget.plasmoVoice
+    ])
+    filesMatching('fabric.mod.json') {
+        expand(version: project.version, description: rootProject.description,
+                minecraftDependency: selectedTarget.minecraftDependency,
+                fabricLoaderVersion: selectedTarget.fabricLoader,
+                fabricApiVersion: selectedTarget.fabricApi,
+                targetJavaVersion: targetJavaVersion)
+    }
+    filesMatching('voicecraft-target.properties') {
+        expand(targetName: requestedTargetName, minecraftVersion: minecraftVersion,
+                simpleVoiceChatAvailable: selectedTarget.simpleVoiceChat,
+                plasmoVoiceAvailable: selectedTarget.plasmoVoice)
+    }
+}
+
+jar {
+    archiveBaseName.set("${rootProject.ext.pluginName}-fabric")
+    archiveClassifier.set("${minecraftVersion}-thin")
+}
+
+shadowJar {
+    archiveBaseName.set("${rootProject.ext.pluginName}-fabric")
+    archiveClassifier.set(minecraftVersion)
+    configurations = [project.configurations.shade]
+    from project(':core').sourceSets.main.output
+    from project(':adapter-api').sourceSets.main.output
+}
+
+build.dependsOn shadowJar
+
+tasks.register('printFabricTarget') {
+    doLast {
+        println("Fabric target ${requestedTargetName}: unobfuscated Minecraft ${minecraftVersion}, Java ${targetJavaVersion}, SVC=${selectedTarget.simpleVoiceChat}, Plasmo=${selectedTarget.plasmoVoice}")
+    }
+}

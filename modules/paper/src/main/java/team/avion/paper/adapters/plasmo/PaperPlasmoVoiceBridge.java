@@ -5,8 +5,8 @@ import su.plo.slib.api.server.position.ServerPos3d;
 import su.plo.voice.api.addon.AddonInitializer;
 import su.plo.voice.api.addon.InjectPlasmoVoice;
 import su.plo.voice.api.addon.annotation.Addon;
-import su.plo.voice.api.audio.codec.AudioDecoder;
 import su.plo.voice.api.event.EventPriority;
+import su.plo.voice.api.encryption.EncryptionException;
 import su.plo.voice.api.server.PlasmoVoiceServer;
 import su.plo.voice.api.server.audio.line.ServerSourceLine;
 import su.plo.voice.api.server.audio.source.BaseServerDirectSource;
@@ -20,17 +20,31 @@ import su.plo.voice.api.server.event.audio.source.ServerSourceAudioPacketEvent;
 import su.plo.voice.api.server.event.connection.UdpClientConnectedEvent;
 import su.plo.voice.api.server.event.connection.UdpClientDisconnectedEvent;
 import su.plo.voice.api.server.event.connection.UdpPacketReceivedEvent;
+import su.plo.voice.api.server.event.connection.TcpPacketReceivedEvent;
 import su.plo.voice.api.server.player.VoicePlayer;
 import su.plo.voice.api.server.player.VoiceServerPlayer;
+import su.plo.voice.proto.data.player.VoicePlayerInfo;
+import su.plo.voice.proto.packets.tcp.clientbound.PlayerDisconnectPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoUpdatePacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.udp.serverbound.PlayerAudioPacket;
 import team.avion.adapter.AdapterContext;
 import team.avion.adapter.AdapterState;
 import team.avion.adapter.VoiceAdapter;
 import team.avion.adapter.VoiceAudioAudience;
+import team.avion.adapter.VoiceAudioDebugMetrics;
+import team.avion.adapter.VoiceAudioEndDebouncer;
 import team.avion.adapter.VoiceAudioFrame;
 import team.avion.adapter.VoiceAudioSource;
 import team.avion.adapter.VoiceAudioSourceType;
 import team.avion.adapter.VoiceCraftAudioSink;
+import team.avion.adapter.VoiceCraftPlayerState;
+import team.avion.adapter.VoiceCraftPlayerStateListener;
+import team.avion.adapter.VoiceEndpointListener;
+import team.avion.adapter.VoiceEndpointState;
+import team.avion.adapter.VoiceCraftEntityIdentity;
+import team.avion.adapter.VoiceCraftIdentityListener;
 import team.avion.paper.VoiceCraftJava;
 
 import java.util.Map;
@@ -40,16 +54,22 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Native Plasmo Voice add-on bridge. Plasmo owns transport; VoiceCraft owns server-side routing. */
 @Addon(id = "voicecraft-java", name = "VoiceCraft.Java Bridge", version = "2.0.0", authors = {"lil-jon-crunk"})
-public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAudioSink, AddonInitializer {
+public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAudioSink, AddonInitializer,
+        VoiceEndpointListener, VoiceCraftPlayerStateListener, VoiceCraftIdentityListener {
     private final VoiceCraftJava plugin;
     private final AtomicBoolean active = new AtomicBoolean();
     private final AtomicBoolean initialized = new AtomicBoolean();
     private final ThreadLocal<Boolean> injecting = ThreadLocal.withInitial(() -> false);
-    private final Map<UUID, AudioDecoder> decoders = new ConcurrentHashMap<>();
     private final Map<UUID, ServerAudioSource<?>> nativeSources = new ConcurrentHashMap<>();
+    private final Map<Integer, ServerAudioSource<?>> nativeSourcesByEntityId = new ConcurrentHashMap<>();
+    private final Map<UUID, AtomicLong> outputSequences = new ConcurrentHashMap<>();
+    private final VoiceAudioDebugMetrics audioDebug;
+    private final VoiceAudioEndDebouncer<UUID> audioEnds =
+            new VoiceAudioEndDebouncer<>("VoiceCraft-Plasmo-AudioEnd");
 
     @InjectPlasmoVoice
     private PlasmoVoiceServer voiceServer;
@@ -59,6 +79,8 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
 
     public PaperPlasmoVoiceBridge(VoiceCraftJava plugin) {
         this.plugin = plugin;
+        this.audioDebug = new VoiceAudioDebugMetrics(
+                () -> plugin.getConfig().getBoolean("config.debug", false), plugin.Logger::info);
     }
 
     @Override
@@ -69,6 +91,8 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
                 this::onClientDisconnected);
         voiceServer.getEventBus().register(this, UdpPacketReceivedEvent.class, EventPriority.HIGHEST,
                 this::onUdpPacketReceived);
+        voiceServer.getEventBus().register(this, TcpPacketReceivedEvent.class, EventPriority.HIGHEST,
+                this::onTcpPacketReceived);
         voiceServer.getEventBus().register(this, ServerSourceAudioPacketEvent.class, EventPriority.HIGHEST,
                 this::onSourceAudioPacket);
         initialized.set(true);
@@ -83,8 +107,10 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         if (voiceServer != null) {
             voiceServer.getEventBus().unregister(this);
         }
-        closeDecoders();
+        audioEnds.close();
         nativeSources.clear();
+        nativeSourcesByEntityId.clear();
+        outputSequences.clear();
         initialized.set(false);
     }
 
@@ -112,6 +138,10 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         this.context = context;
         context.audioBridge().registerAudioSink(this);
         active.set(true);
+        context.audioBridge().registerPlayerStateListener(this);
+        context.audioBridge().registerIdentityListener(this);
+        plugin.getVoiceEndpointRegistry().registerListener(this);
+        context.audioBridge().entityIdentities().forEach(this::entityIdentityRegistered);
         state = AdapterState.RUNNING;
         bootstrapConnectedPlayers();
     }
@@ -119,10 +149,16 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
     @Override
     public void stop() {
         active.set(false);
+        clearProjectedPlayers();
+        plugin.getVoiceEndpointRegistry().unregisterListener(this);
         if (context != null) {
             context.audioBridge().unregisterAudioSink(this);
+            context.audioBridge().unregisterPlayerStateListener(this);
+            context.audioBridge().unregisterIdentityListener(this);
         }
-        closeDecoders();
+        audioEnds.clear();
+        nativeSourcesByEntityId.clear();
+        outputSequences.clear();
         state = AdapterState.STOPPED;
     }
 
@@ -135,6 +171,7 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null) {
                 plugin.getVoiceEndpointRegistry().connect(id(), player);
+                sendProjectedPlayersTo((VoiceServerPlayer) event.getConnection().getPlayer());
             }
         });
     }
@@ -144,7 +181,9 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
             return;
         }
         UUID playerId = event.getConnection().getPlayer().getInstance().getUuid();
-        closeDecoder(playerId);
+        if (audioEnds.cancel(playerId)) {
+            audioDebug.recordEnd("plasmo-in", "cancelled");
+        }
         runMain(() -> {
             Player player = plugin.getServer().getPlayer(playerId);
             plugin.getVoiceEndpointRegistry().disconnect(id(), playerId,
@@ -169,18 +208,57 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
             event.setCancelled(true);
             return;
         }
+        byte[] opus = decryptFrame(packet.getData(), "player " + playerId);
+        if (opus == null || opus.length == 0) {
+            event.setCancelled(true);
+            return;
+        }
+        if (audioEnds.cancel(playerId)) {
+            audioDebug.recordEnd("plasmo-in", "cancelled");
+        }
+        audioDebug.recordFrame("plasmo-in", packet.getSequenceNumber(), opus.length);
         VoiceAudioSource source = VoiceAudioSource.player(entityId.getAsInt(), playerId, packet.getDistance());
         context.audioBridge().sendAudioFrame(new VoiceAudioFrame(UUID.randomUUID(), id(), source,
                 VoiceAudioAudience.PROXIMITY, packet.getSequenceNumber(),
-                (int) (packet.getSequenceNumber() & 0xFFFF), loudness(playerId, packet.getData()), packet.getData()));
+                (int) (packet.getSequenceNumber() & 0xFFFF), 1F, opus));
         event.setCancelled(true);
+    }
+
+    private void onTcpPacketReceived(TcpPacketReceivedEvent event) {
+        if (!active.get() || context == null) {
+            return;
+        }
+        UUID playerId = event.getPlayer().getInstance().getUuid();
+        if (event.getPacket() instanceof PlayerStatePacket statePacket
+                && plugin.getVoiceEndpointRegistry().isConnected(playerId, id())) {
+            context.audioBridge().updatePlayerVoiceState(new VoiceCraftPlayerState(playerId,
+                    statePacket.isVoiceDisabled(), statePacket.isMicrophoneMuted()));
+            return;
+        }
+        if (event.getPacket() instanceof PlayerAudioEndPacket endPacket
+                && plugin.getVoiceEndpointRegistry().isPrimary(playerId, id())) {
+            plugin.getSessionManager().getBoundEntityId(event.getPlayer().getInstance().getName())
+                    .ifPresent(entityId -> {
+                        audioDebug.recordEnd("plasmo-in", "scheduled");
+                        audioEnds.schedule(playerId, () -> {
+                            if (active.get() && context != null) {
+                                context.audioBridge().sendEntityAudioEnd(entityId, endPacket.getSequenceNumber());
+                                audioDebug.recordEnd("plasmo-in", "fired");
+                            }
+                        });
+                    });
+        }
     }
 
     private void onSourceAudioPacket(ServerSourceAudioPacketEvent event) {
         if (!active.get() || event.isCancelled() || injecting.get()) {
             return;
         }
-        byte[] opus = event.getPacket().getData();
+        byte[] encrypted = event.getPacket().getData();
+        if (encrypted == null || encrypted.length == 0) {
+            return;
+        }
+        byte[] opus = decryptFrame(encrypted, "source " + event.getSource().getId());
         if (opus == null || opus.length == 0) {
             return;
         }
@@ -210,13 +288,21 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         if (source == null) {
             return;
         }
+        byte[] encrypted = encryptFrame(frame.opusFrame(), "source " + frame.source().streamId());
+        if (encrypted == null) {
+            return;
+        }
+        nativeSourcesByEntityId.put(frame.source().voiceCraftEntityId(), source);
+        long outputSequence = nextOutputSequence(source.getId());
+        audioDebug.recordFrame("plasmo-out/from-" + frame.originAdapter(), outputSequence,
+                frame.opusFrame().length);
         injecting.set(true);
         try {
             if (source instanceof ServerProximitySource<?> proximity) {
-                proximity.sendAudioFrame(frame.opusFrame(), frame.sequenceNumber(),
+                proximity.sendAudioFrame(encrypted, outputSequence,
                         (short) Math.min(Short.MAX_VALUE, Math.round(frame.source().distance())));
             } else if (source instanceof BaseServerDirectSource direct) {
-                direct.sendAudioFrame(frame.opusFrame(), frame.sequenceNumber());
+                direct.sendAudioFrame(encrypted, outputSequence);
             }
         } finally {
             injecting.remove();
@@ -228,6 +314,28 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         // Rich frames are delivered through receiveAudioFrame.
     }
 
+    @Override
+    public void receiveEntityAudioEnd(int entityId, long sequenceNumber) {
+        ServerAudioSource<?> source = nativeSourcesByEntityId.get(entityId);
+        if (!active.get() || source == null) {
+            return;
+        }
+        injecting.set(true);
+        try {
+            audioDebug.recordEnd("plasmo-out", "fired");
+            long outputSequence = nextOutputSequence(source.getId());
+            if (source instanceof ServerProximitySource<?> proximity) {
+                proximity.sendAudioEnd(outputSequence,
+                        (short) Math.min(Short.MAX_VALUE, Math.round(
+                                plugin.getConfig().getDouble("config.voice.proximity-distance", 30D))));
+            } else if (source instanceof BaseServerDirectSource direct) {
+                direct.sendAudioEnd(outputSequence);
+            }
+        } finally {
+            injecting.remove();
+        }
+    }
+
     private ServerAudioSource<?> createNativeSource(VoiceAudioSource source, VoiceAudioAudience audience) {
         ServerSourceLine line = voiceServer.getSourceLineManager().getLineByName("proximity").orElse(null);
         if (line == null) {
@@ -235,7 +343,10 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         }
         return switch (source.type()) {
             case PLAYER -> voiceServer.getPlayerManager().getPlayerById(source.playerId())
-                    .map(player -> line.createPlayerSource(player, source.stereo())).orElse(null);
+                    .map(player -> player.hasVoiceChat()
+                            ? line.createPlayerSource(player, source.stereo())
+                            : line.createEntitySource(player.getInstance(), source.stereo()))
+                    .orElse(null);
             case ENTITY -> {
                 Player player = source.minecraftEntityId() == null ? null
                         : plugin.getServer().getPlayer(source.minecraftEntityId());
@@ -328,42 +439,120 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         return source instanceof ServerBroadcastSource ? VoiceAudioAudience.EVERYONE : VoiceAudioAudience.PROXIMITY;
     }
 
-    private float loudness(UUID playerId, byte[] opus) {
+    private byte[] decryptFrame(byte[] encrypted, String description) {
         try {
-            AudioDecoder decoder = decoders.get(playerId);
-            if (decoder == null) {
-                AudioDecoder created = voiceServer.createOpusDecoder(false);
-                created.open();
-                AudioDecoder existing = decoders.putIfAbsent(playerId, created);
-                if (existing == null) {
-                    decoder = created;
-                } else {
-                    created.close();
-                    decoder = existing;
-                }
-            }
-            short[] samples = decoder.decode(opus);
-            int peak = 0;
-            for (short sample : samples) {
-                peak = Math.max(peak, Math.abs((int) sample));
-            }
-            return peak / 32768F;
-        } catch (Exception ignored) {
-            closeDecoder(playerId);
-            return 0F;
+            return voiceServer.getDefaultEncryption().decrypt(encrypted);
+        } catch (EncryptionException exception) {
+            plugin.Logger.warn("Failed to decrypt Plasmo Voice audio from " + description + ": "
+                    + exception.getMessage());
+            return null;
         }
     }
 
-    private void closeDecoder(UUID playerId) {
-        AudioDecoder decoder = decoders.remove(playerId);
-        if (decoder != null) {
-            decoder.close();
+    private byte[] encryptFrame(byte[] opus, String description) {
+        try {
+            return voiceServer.getDefaultEncryption().encrypt(opus);
+        } catch (EncryptionException exception) {
+            plugin.Logger.warn("Failed to encrypt Plasmo Voice audio for " + description + ": "
+                    + exception.getMessage());
+            return null;
         }
     }
 
-    private void closeDecoders() {
-        decoders.values().forEach(AudioDecoder::close);
-        decoders.clear();
+    private long nextOutputSequence(UUID sourceId) {
+        return outputSequences.computeIfAbsent(sourceId, ignored -> new AtomicLong()).getAndIncrement();
+    }
+
+    @Override
+    public void endpointUpdated(VoiceEndpointState endpoint) {
+        if (active.get() && !endpoint.isConnectedThrough(id())) {
+            broadcastProjectedPlayer(endpoint);
+        }
+    }
+
+    @Override
+    public void endpointRemoved(UUID playerId, String playerName) {
+        if (active.get() && voiceServer != null) {
+            voiceServer.getTcpPacketManager().broadcast(new PlayerDisconnectPacket(playerId));
+            nativeSources.remove(playerId);
+        }
+    }
+
+    @Override
+    public void playerVoiceStateUpdated(VoiceCraftPlayerState playerState) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(playerState.playerId());
+        if (!active.get() || (endpoint != null && endpoint.isConnectedThrough(id()))) {
+            return;
+        }
+        context.audioBridge().entityIdentities().stream()
+                .filter(identity -> identity.playerId().equals(playerState.playerId())).findFirst()
+                .ifPresent(this::broadcastProjectedPlayer);
+    }
+
+    @Override
+    public void entityIdentityRegistered(VoiceCraftEntityIdentity identity) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(identity.playerId());
+        if (active.get() && (endpoint == null || !endpoint.isConnectedThrough(id()))) {
+            broadcastProjectedPlayer(identity);
+        }
+    }
+
+    @Override
+    public void entityIdentityUnregistered(VoiceCraftEntityIdentity identity) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(identity.playerId());
+        if (active.get() && (endpoint == null || endpoint.transports().isEmpty())) {
+            voiceServer.getTcpPacketManager().broadcast(new PlayerDisconnectPacket(identity.playerId()));
+        }
+    }
+
+    private void sendProjectedPlayersTo(VoiceServerPlayer receiver) {
+        context.audioBridge().entityIdentities().stream()
+                .filter(identity -> {
+                    VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(identity.playerId());
+                    return endpoint == null || !endpoint.isConnectedThrough(id());
+                })
+                .map(this::projectedPlayerInfo)
+                .forEach(info -> receiver.sendPacket(new PlayerInfoUpdatePacket(info)));
+    }
+
+    private void broadcastProjectedPlayer(VoiceEndpointState endpoint) {
+        if (voiceServer != null) {
+            voiceServer.getTcpPacketManager().broadcast(new PlayerInfoUpdatePacket(projectedPlayerInfo(endpoint)));
+        }
+    }
+
+    private void broadcastProjectedPlayer(VoiceCraftEntityIdentity identity) {
+        if (voiceServer != null) {
+            voiceServer.getTcpPacketManager().broadcast(new PlayerInfoUpdatePacket(projectedPlayerInfo(identity)));
+        }
+    }
+
+    private VoicePlayerInfo projectedPlayerInfo(VoiceEndpointState endpoint) {
+        VoiceCraftPlayerState playerState = context == null ? null
+                : context.audioBridge().playerVoiceState(endpoint.playerId()).orElse(null);
+        return new VoicePlayerInfo(endpoint.playerId(), endpoint.playerName(), false,
+                playerState != null && playerState.voiceDisabled(),
+                playerState != null && playerState.microphoneMuted());
+    }
+
+    private VoicePlayerInfo projectedPlayerInfo(VoiceCraftEntityIdentity identity) {
+        VoiceCraftPlayerState playerState = context == null ? null
+                : context.audioBridge().playerVoiceState(identity.playerId()).orElse(null);
+        return new VoicePlayerInfo(identity.playerId(), identity.playerName(), false,
+                playerState != null && playerState.voiceDisabled(),
+                playerState != null && playerState.microphoneMuted());
+    }
+
+    private void clearProjectedPlayers() {
+        if (voiceServer == null) {
+            return;
+        }
+        if (context != null) {
+            context.audioBridge().entityIdentities().stream()
+                    .map(VoiceCraftEntityIdentity::playerId).distinct()
+                    .forEach(playerId -> voiceServer.getTcpPacketManager()
+                            .broadcast(new PlayerDisconnectPacket(playerId)));
+        }
     }
 
     private void bootstrapConnectedPlayers() {

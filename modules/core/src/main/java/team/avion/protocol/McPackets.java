@@ -1,11 +1,14 @@
 package team.avion.protocol;
 
+import java.math.BigInteger;
+
 import team.avion.protocol.McProtocolEnums.CreateEntityResponseCode;
 import team.avion.protocol.McProtocolEnums.DestroyEntityResponseCode;
 import team.avion.protocol.McProtocolEnums.EffectType;
 import team.avion.protocol.McProtocolEnums.EventType;
 import team.avion.protocol.McProtocolEnums.McApiPacketType;
 import team.avion.protocol.McProtocolEnums.PositioningType;
+import team.avion.protocol.McProtocolEnums.PropertyType;
 import team.avion.protocol.McProtocolEnums.ResetResponseCode;
 import team.avion.protocol.McProtocolTypes.Guid;
 import team.avion.protocol.McProtocolTypes.Vector2;
@@ -26,6 +29,15 @@ public final class McPackets {
         McApiPacketType packetType();
     }
 
+    public interface McApiEventPacket extends McApiPacket {
+        EventType eventType();
+
+        @Override
+        default McApiPacketType packetType() {
+            throw new UnsupportedOperationException("McApi events must be wrapped in EventRequestPacket");
+        }
+    }
+
     public interface RequestIdPacket {
         String requestId();
     }
@@ -44,7 +56,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class IntValuePacket implements McApiPacket {
+    public abstract static class IntValuePacket implements NetSerializable {
         public int Id;
         public int Value;
 
@@ -61,7 +73,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class BoolValuePacket implements McApiPacket {
+    public abstract static class BoolValuePacket implements NetSerializable {
         public int Id;
         public boolean Value;
 
@@ -78,7 +90,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class FloatValuePacket implements McApiPacket {
+    public abstract static class FloatValuePacket implements NetSerializable {
         public int Id;
         public float Value;
 
@@ -95,7 +107,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class StringValuePacket implements McApiPacket {
+    public abstract static class StringValuePacket implements NetSerializable {
         public int Id;
         public String Value = "";
         private final int maxLength;
@@ -117,7 +129,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class Vector2ValuePacket implements McApiPacket {
+    public abstract static class Vector2ValuePacket implements NetSerializable {
         public int Id;
         public Vector2 Value = new Vector2(0, 0);
 
@@ -135,7 +147,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class Vector3ValuePacket implements McApiPacket {
+    public abstract static class Vector3ValuePacket implements NetSerializable {
         public int Id;
         public Vector3 Value = new Vector3(0, 0, 0);
 
@@ -154,7 +166,7 @@ public final class McPackets {
         }
     }
 
-    public abstract static class EntityCreatedPacket implements McApiPacket {
+    public abstract static class EntityCreatedPacket implements McApiEventPacket {
         public int Id;
         public float Loudness;
         public long LastSpoke;
@@ -171,6 +183,91 @@ public final class McPackets {
             Id = reader.getInt();
             Loudness = reader.getFloat();
             LastSpoke = reader.getLong();
+        }
+    }
+
+    public abstract static class EntityPropertyPacket implements NetSerializable {
+        public int Id;
+        public String Key = "";
+        public PropertyType PropertyTypeValue = PropertyType.NULL;
+        public Object Value;
+
+        @Override
+        public void serialize(NetDataWriter writer) {
+            writer.putInt(Id);
+            writer.putString(Key, McProtocolConstants.MAX_STRING_LENGTH);
+            PropertyType propertyType = resolvePropertyType(Value, PropertyTypeValue);
+            writer.putByte(propertyType.ordinal());
+            switch (propertyType) {
+                case NULL -> {
+                }
+                case BOOLEAN -> writer.putBool((Boolean) Value);
+                case SBYTE -> writer.putSbyte(((Number) Value).intValue());
+                case BYTE -> writer.putByte(((Number) Value).intValue());
+                case SHORT -> writer.putShort(((Number) Value).intValue());
+                case USHORT -> writer.putUshort(((Number) Value).intValue());
+                case INT -> writer.putInt(((Number) Value).intValue());
+                case UINT -> writer.putUint(((Number) Value).longValue());
+                case LONG -> writer.putLong(((Number) Value).longValue());
+                case ULONG -> writer.putUlong((BigInteger) Value);
+                case FLOAT -> writer.putFloat(((Number) Value).floatValue());
+                case DOUBLE -> writer.putDouble(((Number) Value).doubleValue());
+            }
+        }
+
+        @Override
+        public void deserialize(NetDataReader reader) {
+            Id = reader.getInt();
+            Key = reader.getString(McProtocolConstants.MAX_STRING_LENGTH);
+            PropertyTypeValue = PropertyType.fromByte(reader.getByte());
+            Value = switch (PropertyTypeValue) {
+                case NULL -> null;
+                case BOOLEAN -> reader.getBool();
+                case SBYTE -> (byte) reader.getSbyte();
+                case BYTE -> reader.getByte();
+                case SHORT -> reader.getShort();
+                case USHORT -> reader.getUshort();
+                case INT -> reader.getInt();
+                case UINT -> reader.getUint();
+                case LONG -> reader.getLong();
+                case ULONG -> reader.getUlong();
+                case FLOAT -> reader.getFloat();
+                case DOUBLE -> reader.getDouble();
+            };
+        }
+
+        private static PropertyType resolvePropertyType(Object value, PropertyType requestedType) {
+            if (value == null) {
+                return PropertyType.NULL;
+            }
+            if (requestedType != null && requestedType != PropertyType.NULL) {
+                return requestedType;
+            }
+            if (value instanceof Boolean) {
+                return PropertyType.BOOLEAN;
+            }
+            if (value instanceof Byte) {
+                return PropertyType.SBYTE;
+            }
+            if (value instanceof Short) {
+                return PropertyType.SHORT;
+            }
+            if (value instanceof Integer) {
+                return PropertyType.INT;
+            }
+            if (value instanceof Long) {
+                return PropertyType.LONG;
+            }
+            if (value instanceof BigInteger) {
+                return PropertyType.ULONG;
+            }
+            if (value instanceof Float) {
+                return PropertyType.FLOAT;
+            }
+            if (value instanceof Double) {
+                return PropertyType.DOUBLE;
+            }
+            throw new IllegalArgumentException("Unsupported McApi property value: " + value.getClass().getName());
         }
     }
 
@@ -236,6 +333,7 @@ public final class McPackets {
     public static final class ProximityEchoEffect implements AudioEffect {
         public float Delay = 0.5f;
         public float Range;
+        public float Factor;
         public float WetDry = 1.0f;
 
         @Override
@@ -247,6 +345,7 @@ public final class McPackets {
         public void serialize(NetDataWriter writer) {
             writer.putFloat(Delay);
             writer.putFloat(Range);
+            writer.putFloat(Factor);
             writer.putFloat(WetDry);
         }
 
@@ -254,6 +353,7 @@ public final class McPackets {
         public void deserialize(NetDataReader reader) {
             Delay = reader.getFloat();
             Range = reader.getFloat();
+            Factor = reader.getFloat();
             WetDry = reader.getFloat();
         }
     }
@@ -284,6 +384,7 @@ public final class McPackets {
     }
 
     public static final class ProximityMuffleEffect implements AudioEffect {
+        public float Factor;
         public float WetDry = 1.0f;
 
         @Override
@@ -293,11 +394,13 @@ public final class McPackets {
 
         @Override
         public void serialize(NetDataWriter writer) {
+            writer.putFloat(Factor);
             writer.putFloat(WetDry);
         }
 
         @Override
         public void deserialize(NetDataReader reader) {
+            Factor = reader.getFloat();
             WetDry = reader.getFloat();
         }
     }
@@ -468,7 +571,7 @@ public final class McPackets {
 
     public static final class EventRequestPacket implements McApiPacket {
         public EventType EventTypeValue = EventType.NONE;
-        public McApiPacket Event;
+        public McApiEventPacket Event;
 
         @Override
         public McApiPacketType packetType() {
@@ -477,7 +580,7 @@ public final class McPackets {
 
         @Override
         public void serialize(NetDataWriter writer) {
-            writer.putByte(EventTypeValue.ordinal());
+            writer.putByte((Event != null ? Event.eventType() : EventTypeValue).ordinal());
             if (Event != null) {
                 Event.serialize(writer);
             }
@@ -634,7 +737,7 @@ public final class McPackets {
         public void deserialize(NetDataReader reader) {
             Id = reader.getInt();
             Timestamp = reader.getUshort();
-            FrameLoudness = reader.getFloat();
+            FrameLoudness = clampLoudness(reader.getFloat());
             Length = reader.availableBytes();
             if (Length > McProtocolConstants.MAXIMUM_ENCODED_BYTES) {
                 throw new IllegalStateException("Array length exceeds maximum number of bytes per packet");
@@ -644,7 +747,7 @@ public final class McPackets {
         }
     }
 
-    public static final class SetEntityTitleRequestPacket extends StringValuePacket {
+    public static final class SetEntityTitleRequestPacket extends StringValuePacket implements McApiPacket {
         public SetEntityTitleRequestPacket() {
             super(McProtocolConstants.MAX_STRING_LENGTH);
         }
@@ -655,7 +758,7 @@ public final class McPackets {
         }
     }
 
-    public static final class SetEntityDescriptionRequestPacket extends StringValuePacket {
+    public static final class SetEntityDescriptionRequestPacket extends StringValuePacket implements McApiPacket {
         public SetEntityDescriptionRequestPacket() {
             super(McProtocolConstants.MAX_DESCRIPTION_STRING_LENGTH);
         }
@@ -666,7 +769,7 @@ public final class McPackets {
         }
     }
 
-    public static final class SetEntityWorldIdRequestPacket extends StringValuePacket {
+    public static final class SetEntityWorldIdRequestPacket extends StringValuePacket implements McApiPacket {
         public SetEntityWorldIdRequestPacket() {
             super(McProtocolConstants.MAX_STRING_LENGTH);
         }
@@ -677,7 +780,7 @@ public final class McPackets {
         }
     }
 
-    public static final class SetEntityNameRequestPacket extends StringValuePacket {
+    public static final class SetEntityNameRequestPacket extends StringValuePacket implements McApiPacket {
         public SetEntityNameRequestPacket() {
             super(McProtocolConstants.MAX_STRING_LENGTH);
         }
@@ -688,66 +791,59 @@ public final class McPackets {
         }
     }
 
-    public static final class SetEntityMuteRequestPacket extends BoolValuePacket {
+    public static final class SetEntityMuteRequestPacket extends BoolValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_MUTE_REQUEST;
         }
     }
 
-    public static final class SetEntityDeafenRequestPacket extends BoolValuePacket {
+    public static final class SetEntityDeafenRequestPacket extends BoolValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_DEAFEN_REQUEST;
         }
     }
 
-    public static final class SetEntityTalkBitmaskRequestPacket extends IntValuePacket {
+    public static final class SetEntityTalkBitmaskRequestPacket extends IntValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_TALK_BITMASK_REQUEST;
         }
     }
 
-    public static final class SetEntityListenBitmaskRequestPacket extends IntValuePacket {
+    public static final class SetEntityListenBitmaskRequestPacket extends IntValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_LISTEN_BITMASK_REQUEST;
         }
     }
 
-    public static final class SetEntityEffectBitmaskRequestPacket extends IntValuePacket {
+    public static final class SetEntityEffectBitmaskRequestPacket extends IntValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_EFFECT_BITMASK_REQUEST;
         }
     }
 
-    public static final class SetEntityPositionRequestPacket extends Vector3ValuePacket {
+    public static final class SetEntityPositionRequestPacket extends Vector3ValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_POSITION_REQUEST;
         }
     }
 
-    public static final class SetEntityRotationRequestPacket extends Vector2ValuePacket {
+    public static final class SetEntityRotationRequestPacket extends Vector2ValuePacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
             return McApiPacketType.SET_ENTITY_ROTATION_REQUEST;
         }
     }
 
-    public static final class SetEntityCaveFactorRequestPacket extends FloatValuePacket {
+    public static final class SetEntityPropertyRequestPacket extends EntityPropertyPacket implements McApiPacket {
         @Override
         public McApiPacketType packetType() {
-            return McApiPacketType.SET_ENTITY_CAVE_FACTOR_REQUEST;
-        }
-    }
-
-    public static final class SetEntityMuffleFactorRequestPacket extends FloatValuePacket {
-        @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.SET_ENTITY_MUFFLE_FACTOR_REQUEST;
+            return McApiPacketType.SET_ENTITY_PROPERTY_REQUEST;
         }
     }
 
@@ -835,14 +931,14 @@ public final class McPackets {
         }
     }
 
-    public static final class OnEffectUpdatedPacket implements McApiPacket {
+    public static final class OnEffectUpdatedPacket implements McApiEventPacket {
         public int Bitmask;
         public EffectType EffectTypeValue = EffectType.NONE;
         public AudioEffect Effect;
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_EFFECT_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_EFFECT_UPDATED;
         }
 
         @Override
@@ -864,8 +960,8 @@ public final class McPackets {
 
     public static final class OnEntityCreatedPacket extends EntityCreatedPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_CREATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_CREATED;
         }
     }
 
@@ -876,8 +972,8 @@ public final class McPackets {
         public PositioningType PositioningTypeValue = PositioningType.SERVER;
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_NETWORK_ENTITY_CREATED;
+        public EventType eventType() {
+            return EventType.ON_NETWORK_ENTITY_CREATED;
         }
 
         @Override
@@ -899,12 +995,12 @@ public final class McPackets {
         }
     }
 
-    public static final class OnEntityDestroyedPacket implements McApiPacket {
+    public static final class OnEntityDestroyedPacket implements McApiEventPacket {
         public int Id;
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_DESTROYED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_DESTROYED;
         }
 
         @Override
@@ -918,14 +1014,14 @@ public final class McPackets {
         }
     }
 
-    public static final class OnEntityVisibilityUpdatedPacket implements McApiPacket {
+    public static final class OnEntityVisibilityUpdatedPacket implements McApiEventPacket {
         public int Id;
         public int Id2;
         public boolean Value;
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_VISIBILITY_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_VISIBILITY_UPDATED;
         }
 
         @Override
@@ -943,113 +1039,106 @@ public final class McPackets {
         }
     }
 
-    public static final class OnEntityWorldIdUpdatedPacket extends StringValuePacket {
+    public static final class OnEntityWorldIdUpdatedPacket extends StringValuePacket implements McApiEventPacket {
         public OnEntityWorldIdUpdatedPacket() {
             super(McProtocolConstants.MAX_STRING_LENGTH);
         }
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_WORLD_ID_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_WORLD_ID_UPDATED;
         }
     }
 
-    public static final class OnEntityNameUpdatedPacket extends StringValuePacket {
+    public static final class OnEntityNameUpdatedPacket extends StringValuePacket implements McApiEventPacket {
         public OnEntityNameUpdatedPacket() {
             super(McProtocolConstants.MAX_STRING_LENGTH);
         }
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_NAME_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_NAME_UPDATED;
         }
     }
 
-    public static final class OnEntityMuteUpdatedPacket extends BoolValuePacket {
+    public static final class OnEntityMuteUpdatedPacket extends BoolValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_MUTE_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_MUTE_UPDATED;
         }
     }
 
-    public static final class OnEntityDeafenUpdatedPacket extends BoolValuePacket {
+    public static final class OnEntityDeafenUpdatedPacket extends BoolValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_DEAFEN_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_DEAFEN_UPDATED;
         }
     }
 
-    public static final class OnEntityServerMuteUpdatedPacket extends BoolValuePacket {
+    public static final class OnEntityServerMuteUpdatedPacket extends BoolValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_SERVER_MUTE_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_SERVER_MUTE_UPDATED;
         }
     }
 
-    public static final class OnEntityServerDeafenUpdatedPacket extends BoolValuePacket {
+    public static final class OnEntityServerDeafenUpdatedPacket extends BoolValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_SERVER_DEAFEN_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_SERVER_DEAFEN_UPDATED;
         }
     }
 
-    public static final class OnEntityTalkBitmaskUpdatedPacket extends IntValuePacket {
+    public static final class OnEntityTalkBitmaskUpdatedPacket extends IntValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_TALK_BITMASK_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_TALK_BITMASK_UPDATED;
         }
     }
 
-    public static final class OnEntityListenBitmaskUpdatedPacket extends IntValuePacket {
+    public static final class OnEntityListenBitmaskUpdatedPacket extends IntValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_LISTEN_BITMASK_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_LISTEN_BITMASK_UPDATED;
         }
     }
 
-    public static final class OnEntityEffectBitmaskUpdatedPacket extends IntValuePacket {
+    public static final class OnEntityEffectBitmaskUpdatedPacket extends IntValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_EFFECT_BITMASK_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_EFFECT_BITMASK_UPDATED;
         }
     }
 
-    public static final class OnEntityPositionUpdatedPacket extends Vector3ValuePacket {
+    public static final class OnEntityPositionUpdatedPacket extends Vector3ValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_POSITION_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_POSITION_UPDATED;
         }
     }
 
-    public static final class OnEntityRotationUpdatedPacket extends Vector2ValuePacket {
+    public static final class OnEntityRotationUpdatedPacket extends Vector2ValuePacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_ROTATION_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_ROTATION_UPDATED;
         }
     }
 
-    public static final class OnEntityCaveFactorUpdatedPacket extends FloatValuePacket {
+    public static final class OnEntityPropertyUpdatedPacket extends EntityPropertyPacket implements McApiEventPacket {
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_CAVE_FACTOR_UPDATED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_PROPERTY_UPDATED;
         }
     }
 
-    public static final class OnEntityMuffleFactorUpdatedPacket extends FloatValuePacket {
-        @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_MUFFLE_FACTOR_UPDATED;
-        }
-    }
-
-    public static final class OnEntityAudioReceivedPacket implements McApiPacket {
+    public static final class OnEntityAudioReceivedPacket implements McApiEventPacket {
         public int Id;
         public int Timestamp;
         public float FrameLoudness;
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_AUDIO_RECEIVED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_AUDIO_RECEIVED;
         }
 
         @Override
@@ -1063,11 +1152,11 @@ public final class McPackets {
         public void deserialize(NetDataReader reader) {
             Id = reader.getInt();
             Timestamp = reader.getUshort();
-            FrameLoudness = reader.getFloat();
+            FrameLoudness = clampLoudness(reader.getFloat());
         }
     }
 
-    public static final class OnEntityAudioDataReceivedPacket implements McApiPacket {
+    public static final class OnEntityAudioDataReceivedPacket implements McApiEventPacket {
         public int Id;
         public int Timestamp;
         public float FrameLoudness;
@@ -1075,8 +1164,8 @@ public final class McPackets {
         public byte[] Data = new byte[0];
 
         @Override
-        public McApiPacketType packetType() {
-            return McApiPacketType.ON_ENTITY_AUDIO_RECEIVED;
+        public EventType eventType() {
+            return EventType.ON_ENTITY_AUDIO_DATA_RECEIVED;
         }
 
         @Override
@@ -1091,7 +1180,7 @@ public final class McPackets {
         public void deserialize(NetDataReader reader) {
             Id = reader.getInt();
             Timestamp = reader.getUshort();
-            FrameLoudness = reader.getFloat();
+            FrameLoudness = clampLoudness(reader.getFloat());
             Length = reader.availableBytes();
             if (Length > McProtocolConstants.MAXIMUM_ENCODED_BYTES) {
                 throw new IllegalStateException("Array length exceeds maximum number of bytes per packet");
@@ -1101,8 +1190,8 @@ public final class McPackets {
         }
     }
 
-    private static McApiPacket readEvent(EventType eventType, NetDataReader reader) {
-        McApiPacket packet = switch (eventType) {
+    private static McApiEventPacket readEvent(EventType eventType, NetDataReader reader) {
+        McApiEventPacket packet = switch (eventType) {
             case ON_EFFECT_UPDATED -> new OnEffectUpdatedPacket();
             case ON_ENTITY_CREATED -> new OnEntityCreatedPacket();
             case ON_NETWORK_ENTITY_CREATED -> new OnNetworkEntityCreatedPacket();
@@ -1119,13 +1208,18 @@ public final class McPackets {
             case ON_ENTITY_EFFECT_BITMASK_UPDATED -> new OnEntityEffectBitmaskUpdatedPacket();
             case ON_ENTITY_POSITION_UPDATED -> new OnEntityPositionUpdatedPacket();
             case ON_ENTITY_ROTATION_UPDATED -> new OnEntityRotationUpdatedPacket();
+            case ON_ENTITY_PROPERTY_UPDATED -> new OnEntityPropertyUpdatedPacket();
             case ON_ENTITY_AUDIO_RECEIVED -> new OnEntityAudioReceivedPacket();
             case ON_ENTITY_AUDIO_DATA_RECEIVED -> new OnEntityAudioDataReceivedPacket();
-            case NONE, ON_ENTITY_PROPERTY_UPDATED -> null;
+            case NONE -> null;
         };
         if (packet != null) {
             packet.deserialize(reader);
         }
         return packet;
+    }
+
+    private static float clampLoudness(float loudness) {
+        return Math.max(0.0f, Math.min(1.0f, loudness));
     }
 }

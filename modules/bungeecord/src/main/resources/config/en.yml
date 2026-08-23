@@ -11,7 +11,7 @@ config:
       port: 9050 # VoiceCraft TCP port
       login-token: "__GENERATED_LOGIN_TOKEN__" # VoiceCraft LoginToken
     voice:
-      port: 1111 # VoiceCraft voice port
+      port: 9050 # VoiceCraft public UDP voice port
 
   voice:
     proximity-distance: 30 # Maximum voice distance

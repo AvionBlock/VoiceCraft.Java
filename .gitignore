@@ -237,3 +237,7 @@ nbdist/
 
 ### Gradle ###
 .gradle*
+
+### Python ###
+__pycache__/
+*.py[cod]

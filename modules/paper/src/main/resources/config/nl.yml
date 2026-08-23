@@ -1,4 +1,4 @@
-config-version: 8 # NIET AANPASSEN: gebruikt voor automatische configmigraties
+config-version: 9 # NIET AANPASSEN: gebruikt voor automatische configmigraties
 
 config:
   debug: false # Extra debuglogging inschakelen
@@ -12,6 +12,18 @@ config:
     client-priority: ["simple-voice-chat", "plasmo"]
     managed-dependencies:
       enabled: true
+    native-configs:
+      owner: "voicecraft"
+      simple-voice-chat:
+        bind-address: ""
+        bind-port: 24454
+        advertised-host: ""
+        advertised-port: 24454
+      plasmo:
+        bind-address: "0.0.0.0"
+        bind-port: 0
+        advertised-host: "0.0.0.0"
+        advertised-port: 0
     plasmo:
       enabled: false # Officiële Plasmo Voice-plugin via VoiceCraft koppelen
       install:
@@ -27,7 +39,7 @@ config:
       port: 9050 # VoiceCraft TCP-poort
       login-token: "__GENERATED_LOGIN_TOKEN__" # VoiceCraft LoginToken
     voice:
-      port: 1111 # Managed VoiceCraft voice port
+      port: 9050 # Publieke UDP-poort van VoiceCraft
     auto-start: true # Beheerde VoiceCraft automatisch starten
     shutdown-on-disable: true # VoiceCraft stoppen als de plugin uitschakelt
     invariant-globalization: true # .NET draaien zonder systeem-ICU-pakketten

@@ -11,10 +11,11 @@ import de.maxhenkel.voicechat.api.events.LocationalSoundPacketEvent;
 import de.maxhenkel.voicechat.api.events.MicrophonePacketEvent;
 import de.maxhenkel.voicechat.api.events.PlayerConnectedEvent;
 import de.maxhenkel.voicechat.api.events.PlayerDisconnectedEvent;
+import de.maxhenkel.voicechat.api.events.PlayerStateChangedEvent;
 import de.maxhenkel.voicechat.api.events.StaticSoundPacketEvent;
-import de.maxhenkel.voicechat.api.opus.OpusDecoder;
 import de.maxhenkel.voicechat.api.packets.EntitySoundPacket;
 import de.maxhenkel.voicechat.api.packets.LocationalSoundPacket;
+import de.maxhenkel.voicechat.api.packets.MicrophonePacket;
 import de.maxhenkel.voicechat.api.packets.SoundPacket;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -24,10 +25,18 @@ import team.avion.adapter.AdapterContext;
 import team.avion.adapter.AdapterState;
 import team.avion.adapter.VoiceAdapter;
 import team.avion.adapter.VoiceAudioAudience;
+import team.avion.adapter.VoiceAudioDebugMetrics;
+import team.avion.adapter.VoiceAudioEndDebouncer;
 import team.avion.adapter.VoiceAudioFrame;
 import team.avion.adapter.VoiceAudioSource;
 import team.avion.adapter.VoiceAudioSourceType;
 import team.avion.adapter.VoiceCraftAudioSink;
+import team.avion.adapter.VoiceCraftPlayerState;
+import team.avion.adapter.VoiceCraftPlayerStateListener;
+import team.avion.adapter.VoiceCraftEntityIdentity;
+import team.avion.adapter.VoiceCraftIdentityListener;
+import team.avion.adapter.VoiceEndpointListener;
+import team.avion.adapter.VoiceEndpointState;
 import team.avion.paper.VoiceCraftJava;
 
 import java.util.Map;
@@ -40,22 +49,27 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Native Simple Voice Chat API bridge. SVC owns transport; VoiceCraft owns server-side routing. */
-public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraftAudioSink, VoicechatPlugin {
+public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraftAudioSink, VoicechatPlugin,
+        VoiceEndpointListener, VoiceCraftPlayerStateListener, VoiceCraftIdentityListener {
     private static final int FINAL_EVENT_PRIORITY = -10_000;
 
     private final VoiceCraftJava plugin;
     private final AtomicBoolean registered = new AtomicBoolean();
     private final AtomicBoolean active = new AtomicBoolean();
-    private final AtomicLong fallbackSequence = new AtomicLong();
+    private final Map<UUID, AtomicLong> fallbackSequences = new ConcurrentHashMap<>();
+    private final Map<UUID, AtomicLong> outputSequences = new ConcurrentHashMap<>();
     private final ThreadLocal<Boolean> injecting = ThreadLocal.withInitial(() -> false);
-    private final Map<UUID, OpusDecoder> decoders = new ConcurrentHashMap<>();
+    private final VoiceAudioDebugMetrics audioDebug;
 
     private volatile AdapterState state = AdapterState.NEW;
     private volatile AdapterContext context;
     private volatile VoicechatServerApi voicechat;
+    private volatile VoiceAudioEndDebouncer<UUID> audioEnds;
 
     public PaperSimpleVoiceChatBridge(VoiceCraftJava plugin) {
         this.plugin = plugin;
+        this.audioDebug = new VoiceAudioDebugMetrics(
+                () -> plugin.getConfig().getBoolean("config.debug", false), plugin.Logger::info);
     }
 
     @Override
@@ -74,6 +88,7 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
     public void registerEvents(EventRegistration registration) {
         registration.registerEvent(PlayerConnectedEvent.class, this::onPlayerConnected, FINAL_EVENT_PRIORITY);
         registration.registerEvent(PlayerDisconnectedEvent.class, this::onPlayerDisconnected, FINAL_EVENT_PRIORITY);
+        registration.registerEvent(PlayerStateChangedEvent.class, this::onPlayerStateChanged, FINAL_EVENT_PRIORITY);
         registration.registerEvent(MicrophonePacketEvent.class, this::onMicrophonePacket, FINAL_EVENT_PRIORITY);
         registration.registerEvent(EntitySoundPacketEvent.class, this::onEntitySoundPacket, FINAL_EVENT_PRIORITY);
         registration.registerEvent(LocationalSoundPacketEvent.class, this::onLocationalSoundPacket, FINAL_EVENT_PRIORITY);
@@ -99,6 +114,11 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
     public void start(AdapterContext context) {
         this.context = context;
         state = AdapterState.STARTING;
+        VoiceAudioEndDebouncer<UUID> previousAudioEnds = audioEnds;
+        if (previousAudioEnds != null) {
+            previousAudioEnds.close();
+        }
+        audioEnds = new VoiceAudioEndDebouncer<>("VoiceCraft-SVC-AudioEnd");
         if (registered.compareAndSet(false, true)) {
             BukkitVoicechatService service = plugin.getServer().getServicesManager().load(BukkitVoicechatService.class);
             if (service == null) {
@@ -110,6 +130,10 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
         }
         context.audioBridge().registerAudioSink(this);
         active.set(true);
+        context.audioBridge().registerPlayerStateListener(this);
+        context.audioBridge().registerIdentityListener(this);
+        plugin.getVoiceEndpointRegistry().registerListener(this);
+        context.audioBridge().entityIdentities().forEach(this::entityIdentityRegistered);
         state = AdapterState.RUNNING;
         bootstrapConnectedPlayers();
     }
@@ -117,11 +141,20 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
     @Override
     public void stop() {
         active.set(false);
+        VoiceAudioEndDebouncer<UUID> pendingAudioEnds = audioEnds;
+        audioEnds = null;
+        if (pendingAudioEnds != null) {
+            pendingAudioEnds.close();
+        }
+        clearProjectedConnections();
+        plugin.getVoiceEndpointRegistry().unregisterListener(this);
         if (context != null) {
             context.audioBridge().unregisterAudioSink(this);
+            context.audioBridge().unregisterPlayerStateListener(this);
+            context.audioBridge().unregisterIdentityListener(this);
         }
-        decoders.values().forEach(OpusDecoder::close);
-        decoders.clear();
+        fallbackSequences.clear();
+        outputSequences.clear();
         state = AdapterState.STOPPED;
     }
 
@@ -143,12 +176,26 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
             return;
         }
         UUID playerId = event.getPlayerUuid();
-        closeDecoder(playerId);
+        VoiceAudioEndDebouncer<UUID> pendingAudioEnds = audioEnds;
+        if (pendingAudioEnds != null) {
+            pendingAudioEnds.cancel(playerId);
+        }
+        fallbackSequences.remove(playerId);
+        outputSequences.remove(playerId);
         runMain(() -> {
             Player player = plugin.getServer().getPlayer(playerId);
             plugin.getVoiceEndpointRegistry().disconnect(id(), playerId,
                     player == null ? playerId.toString() : player.getName());
         });
+    }
+
+    private void onPlayerStateChanged(PlayerStateChangedEvent event) {
+        if (!active.get() || context == null
+                || !plugin.getVoiceEndpointRegistry().isConnected(event.getPlayerUuid(), id())) {
+            return;
+        }
+        context.audioBridge().updatePlayerVoiceState(new VoiceCraftPlayerState(
+                event.getPlayerUuid(), event.isDisabled(), false));
     }
 
     private void onMicrophonePacket(MicrophonePacketEvent event) {
@@ -166,16 +213,35 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
         }
         OptionalInt entityId = plugin.getSessionManager().getBoundEntityId(playerName(playerId));
         byte[] opus = event.getPacket().getOpusEncodedData();
-        if (entityId.isEmpty() || opus == null || opus.length == 0) {
+        if (entityId.isEmpty()) {
             event.cancel();
             return;
         }
-        long sequence = fallbackSequence.incrementAndGet();
+        long sequence = microphoneSequence(playerId, event.getPacket());
+        if (opus == null || opus.length == 0) {
+            VoiceAudioEndDebouncer<UUID> pendingAudioEnds = audioEnds;
+            if (pendingAudioEnds != null) {
+                audioDebug.recordEnd("svc-in", "scheduled");
+                pendingAudioEnds.schedule(playerId, () -> {
+                    if (active.get() && context != null) {
+                        context.audioBridge().sendEntityAudioEnd(entityId.getAsInt(), sequence);
+                        audioDebug.recordEnd("svc-in", "fired");
+                    }
+                });
+            }
+            event.cancel();
+            return;
+        }
+        VoiceAudioEndDebouncer<UUID> pendingAudioEnds = audioEnds;
+        if (pendingAudioEnds != null && pendingAudioEnds.cancel(playerId)) {
+            audioDebug.recordEnd("svc-in", "cancelled");
+        }
+        audioDebug.recordFrame("svc-in", sequence, opus.length);
         int timestamp = (int) (sequence & 0xFFFF);
         VoiceAudioSource source = VoiceAudioSource.player(entityId.getAsInt(), playerId,
                 (float) plugin.getConfig().getDouble("config.voice.proximity-distance", 30D));
         context.audioBridge().sendAudioFrame(new VoiceAudioFrame(UUID.randomUUID(), id(), source,
-                VoiceAudioAudience.PROXIMITY, sequence, timestamp, loudness(playerId, opus), opus));
+                VoiceAudioAudience.PROXIMITY, sequence, timestamp, 1F, opus));
         event.cancel();
     }
 
@@ -241,6 +307,9 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
         if (!active.get() || api == null || frame.opusFrame().length == 0) {
             return;
         }
+        VoiceAudioFrame outputFrame = withOutputSequence(frame);
+        audioDebug.recordFrame("svc-out/from-" + frame.originAdapter(), outputFrame.sequenceNumber(),
+                outputFrame.opusFrame().length);
         injecting.set(true);
         try {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
@@ -253,7 +322,12 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
                 if (connection == null || !connection.isConnected() || connection.isDisabled()) {
                     continue;
                 }
-                sendFrameTo(api, connection, frame);
+                try {
+                    sendFrameTo(api, connection, outputFrame);
+                } catch (RuntimeException exception) {
+                    plugin.Logger.warn("Failed to deliver bridged audio to Simple Voice Chat player "
+                            + player.getName() + ": " + exception.getMessage());
+                }
             }
         } finally {
             injecting.remove();
@@ -263,6 +337,127 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
     @Override
     public void receiveEntityAudio(int entityId, int timestamp, float loudness, byte[] opusFrame) {
         // Rich frames are delivered through receiveAudioFrame.
+    }
+
+    @Override
+    public void receiveEntityAudioEnd(int entityId, long sequenceNumber) {
+        VoicechatServerApi api = voicechat;
+        if (!active.get() || api == null || context == null) {
+            return;
+        }
+        context.audioBridge().entityIdentity(entityId).ifPresent(identity -> {
+            injecting.set(true);
+            try {
+                audioDebug.recordEnd("svc-out", "fired");
+                long outputSequence = nextOutputSequence(identity.playerId());
+                VoiceAudioFrame end = new VoiceAudioFrame(UUID.randomUUID(), "voicecraft",
+                        VoiceAudioSource.player(entityId, identity.playerId(),
+                                (float) plugin.getConfig().getDouble("config.voice.proximity-distance", 30D)),
+                        VoiceAudioAudience.PROXIMITY, outputSequence, (int) outputSequence, 0F, new byte[0]);
+                for (Player player : plugin.getServer().getOnlinePlayers()) {
+                    if (!plugin.getVoiceEndpointRegistry().isPrimary(player.getUniqueId(), id())
+                            || player.getUniqueId().equals(identity.playerId())) {
+                        continue;
+                    }
+                    VoicechatConnection connection = api.getConnectionOf(player.getUniqueId());
+                    if (connection != null && connection.isConnected() && !connection.isDisabled()) {
+                        sendFrameTo(api, connection, end);
+                    }
+                }
+            } finally {
+                injecting.remove();
+            }
+        });
+    }
+
+    private VoiceAudioFrame withOutputSequence(VoiceAudioFrame frame) {
+        long sequence = nextOutputSequence(frame.source().streamId());
+        return new VoiceAudioFrame(frame.routeId(), frame.originAdapter(), frame.source(), frame.audience(),
+                sequence, (int) (sequence & 0xFFFF), frame.loudness(), frame.opusFrame());
+    }
+
+    private long nextOutputSequence(UUID streamId) {
+        return outputSequences.computeIfAbsent(streamId, ignored -> new AtomicLong()).getAndIncrement();
+    }
+
+    private long microphoneSequence(UUID playerId, MicrophonePacket packet) {
+        try {
+            return packet.entitySoundPacketBuilder().build().getSequenceNumber();
+        } catch (RuntimeException ignored) {
+            return fallbackSequences.computeIfAbsent(playerId, key -> new AtomicLong()).getAndIncrement();
+        }
+    }
+
+    @Override
+    public void endpointUpdated(VoiceEndpointState endpoint) {
+        runMain(() -> syncProjectedConnection(endpoint));
+    }
+
+    @Override
+    public void endpointRemoved(UUID playerId, String playerName) {
+        runMain(() -> setProjectedConnection(playerId, false, false));
+    }
+
+    @Override
+    public void playerVoiceStateUpdated(VoiceCraftPlayerState playerState) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(playerState.playerId());
+        if ((endpoint == null || !endpoint.isConnectedThrough(id())) && hasIdentity(playerState.playerId())) {
+            runMain(() -> setProjectedConnection(playerState.playerId(), true, playerState.voiceDisabled()));
+        }
+    }
+
+    @Override
+    public void entityIdentityRegistered(VoiceCraftEntityIdentity identity) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(identity.playerId());
+        if (endpoint == null || !endpoint.isConnectedThrough(id())) {
+            runMain(() -> {
+                boolean disabled = context.audioBridge().playerVoiceState(identity.playerId())
+                        .map(VoiceCraftPlayerState::voiceDisabled).orElse(false);
+                setProjectedConnection(identity.playerId(), true, disabled);
+            });
+        }
+    }
+
+    @Override
+    public void entityIdentityUnregistered(VoiceCraftEntityIdentity identity) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(identity.playerId());
+        if (endpoint == null || endpoint.transports().isEmpty()) {
+            runMain(() -> setProjectedConnection(identity.playerId(), false, false));
+        }
+    }
+
+    private void syncProjectedConnection(VoiceEndpointState endpoint) {
+        if (!endpoint.isConnectedThrough(id())) {
+            boolean disabled = context == null ? false : context.audioBridge().playerVoiceState(endpoint.playerId())
+                    .map(VoiceCraftPlayerState::voiceDisabled).orElse(false);
+            setProjectedConnection(endpoint.playerId(), true, disabled);
+        }
+    }
+
+    private void setProjectedConnection(UUID playerId, boolean connected, boolean disabled) {
+        VoicechatServerApi api = voicechat;
+        if (api == null) {
+            return;
+        }
+        VoicechatConnection connection = api.getConnectionOf(playerId);
+        if (connection == null || connection.isInstalled()) {
+            return;
+        }
+        connection.setConnected(connected);
+        connection.setDisabled(disabled);
+    }
+
+    private void clearProjectedConnections() {
+        if (context != null) {
+            context.audioBridge().entityIdentities().stream()
+                    .map(VoiceCraftEntityIdentity::playerId).distinct()
+                    .forEach(playerId -> setProjectedConnection(playerId, false, false));
+        }
+    }
+
+    private boolean hasIdentity(UUID playerId) {
+        return context != null && context.audioBridge().entityIdentities().stream()
+                .anyMatch(identity -> identity.playerId().equals(playerId));
     }
 
     private void sendFrameTo(VoicechatServerApi api, VoicechatConnection connection, VoiceAudioFrame frame) {
@@ -308,32 +503,6 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
             }
         }
         return null;
-    }
-
-    private float loudness(UUID playerId, byte[] opus) {
-        VoicechatServerApi api = voicechat;
-        if (api == null) {
-            return 0F;
-        }
-        try {
-            OpusDecoder decoder = decoders.computeIfAbsent(playerId, ignored -> api.createDecoder());
-            short[] samples = decoder.decode(opus);
-            int peak = 0;
-            for (short sample : samples) {
-                peak = Math.max(peak, Math.abs((int) sample));
-            }
-            return peak / 32768F;
-        } catch (RuntimeException ignored) {
-            closeDecoder(playerId);
-            return 0F;
-        }
-    }
-
-    private void closeDecoder(UUID playerId) {
-        OpusDecoder decoder = decoders.remove(playerId);
-        if (decoder != null) {
-            decoder.close();
-        }
     }
 
     private void bootstrapConnectedPlayers() {

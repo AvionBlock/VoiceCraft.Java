@@ -35,6 +35,7 @@ import team.avion.protocol.McPackets.SetEntityListenBitmaskRequestPacket;
 import team.avion.protocol.McPackets.SetEntityMuteRequestPacket;
 import team.avion.protocol.McPackets.SetEntityNameRequestPacket;
 import team.avion.protocol.McPackets.SetEntityPositionRequestPacket;
+import team.avion.protocol.McPackets.SetEntityPropertyRequestPacket;
 import team.avion.protocol.McPackets.SetEntityRotationRequestPacket;
 import team.avion.protocol.McPackets.SetEntityTalkBitmaskRequestPacket;
 import team.avion.protocol.McPackets.SetEntityTitleRequestPacket;
@@ -71,6 +72,7 @@ public final class McProtocolCodec {
         register(McApiPacketType.SET_ENTITY_EFFECT_BITMASK_REQUEST, SetEntityEffectBitmaskRequestPacket::new);
         register(McApiPacketType.SET_ENTITY_POSITION_REQUEST, SetEntityPositionRequestPacket::new);
         register(McApiPacketType.SET_ENTITY_ROTATION_REQUEST, SetEntityRotationRequestPacket::new);
+        register(McApiPacketType.SET_ENTITY_PROPERTY_REQUEST, SetEntityPropertyRequestPacket::new);
         register(McApiPacketType.RESET_RESPONSE, ResetResponsePacket::new);
         register(McApiPacketType.CREATE_ENTITY_RESPONSE, CreateEntityResponsePacket::new);
         register(McApiPacketType.DESTROY_ENTITY_RESPONSE, DestroyEntityResponsePacket::new);

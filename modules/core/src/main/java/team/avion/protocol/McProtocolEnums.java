@@ -39,30 +39,7 @@ public final class McProtocolEnums {
         SET_ENTITY_PROPERTY_REQUEST,
         RESET_RESPONSE,
         CREATE_ENTITY_RESPONSE,
-        DESTROY_ENTITY_RESPONSE,
-
-        // Obsolete top-level event packet ids kept only for legacy Java model classes.
-        SET_ENTITY_CAVE_FACTOR_REQUEST,
-        SET_ENTITY_MUFFLE_FACTOR_REQUEST,
-        ON_EFFECT_UPDATED,
-        ON_ENTITY_CREATED,
-        ON_NETWORK_ENTITY_CREATED,
-        ON_ENTITY_DESTROYED,
-        ON_ENTITY_VISIBILITY_UPDATED,
-        ON_ENTITY_WORLD_ID_UPDATED,
-        ON_ENTITY_NAME_UPDATED,
-        ON_ENTITY_MUTE_UPDATED,
-        ON_ENTITY_DEAFEN_UPDATED,
-        ON_ENTITY_SERVER_MUTE_UPDATED,
-        ON_ENTITY_SERVER_DEAFEN_UPDATED,
-        ON_ENTITY_TALK_BITMASK_UPDATED,
-        ON_ENTITY_LISTEN_BITMASK_UPDATED,
-        ON_ENTITY_EFFECT_BITMASK_UPDATED,
-        ON_ENTITY_POSITION_UPDATED,
-        ON_ENTITY_ROTATION_UPDATED,
-        ON_ENTITY_CAVE_FACTOR_UPDATED,
-        ON_ENTITY_MUFFLE_FACTOR_UPDATED,
-        ON_ENTITY_AUDIO_RECEIVED;
+        DESTROY_ENTITY_RESPONSE;
 
         public static McApiPacketType fromByte(int value) {
             McApiPacketType[] values = values();
@@ -131,6 +108,29 @@ public final class McProtocolEnums {
             EffectType[] values = values();
             if (value < 0 || value >= values.length) {
                 throw new IllegalArgumentException("Unknown effect type id: " + value);
+            }
+            return values[value];
+        }
+    }
+
+    public enum PropertyType {
+        NULL,
+        BOOLEAN,
+        SBYTE,
+        BYTE,
+        SHORT,
+        USHORT,
+        INT,
+        UINT,
+        LONG,
+        ULONG,
+        FLOAT,
+        DOUBLE;
+
+        public static PropertyType fromByte(int value) {
+            PropertyType[] values = values();
+            if (value < 0 || value >= values.length) {
+                throw new IllegalArgumentException("Unknown property type id: " + value);
             }
             return values[value];
         }

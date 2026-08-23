@@ -17,12 +17,16 @@ class PaperConfigTemplateTest {
                 assertNotNull(input, resource);
                 String config = new String(input.readAllBytes(), StandardCharsets.UTF_8);
 
-                assertTrue(config.startsWith("config-version: 8"), resource);
+                assertTrue(config.startsWith("config-version: 9"), resource);
                 for (String status : List.of("disconnected", "connected", "speaking", "muted", "deafened")) {
                     assertTrue(config.contains(status + ": \""), resource + " missing symbol " + status);
                 }
                 assertTrue(config.contains("client-priority: [\"simple-voice-chat\", \"plasmo\"]"), resource);
                 assertTrue(config.contains("managed-dependencies:"), resource);
+                assertTrue(config.contains("native-configs:"), resource);
+                assertTrue(config.contains("owner: \"voicecraft\""), resource);
+                assertTrue(config.contains("bind-port: 24454"), resource);
+                assertTrue(config.contains("port: 9050"), resource);
                 assertFalse(config.contains("compatibility-version:"), resource);
                 assertFalse(config.contains("bind-host:"), resource);
             }

@@ -11,8 +11,8 @@ It is especially useful for cross-play servers. Java players can keep their pref
 | Player client | How it connects |
 | --- | --- |
 | VoiceCraft client | Connects to the VoiceCraft backend and binds to the Minecraft player with `/voice bind` |
-| Simple Voice Chat | Connects directly to the built-in Paper adapter |
-| Plasmo Voice | Connects directly to the built-in Paper adapter |
+| Simple Voice Chat | Connects through the official SVC server plugin/mod and its public API |
+| Plasmo Voice | Connects through the official Plasmo Voice server plugin/mod and its public API |
 | Bedrock through Geyser | Uses the standalone VoiceCraft client with no Java client mod required |
 
 All connected players share the same positional audio environment. VoiceCraft.Java synchronizes Minecraft worlds, positions, rotation, proximity distance, cave echo, underwater muffling, player identity, speaking lifecycle, and supported mute/deafen states.
@@ -21,7 +21,9 @@ All connected players share the same positional audio environment. VoiceCraft.Ja
 
 - Cross-client proximity audio between VoiceCraft, Simple Voice Chat, and Plasmo Voice.
 - Voice chat for Java and Bedrock players in the same conversation.
-- Built-in SVC and Plasmo protocol adapters — no separate server-side voice plugin required.
+- Native SVC and Plasmo API bridges without protocol emulation.
+- Automatic installation of compatible official SVC/Plasmo server dependencies.
+- One VoiceCraft.Java config for VoiceCraft, SVC, and Plasmo bind/advertised ports.
 - Automatic VoiceCraft Server download, configuration, startup, and shutdown on Paper.
 - Direct mode for a single Paper server.
 - Velocity and BungeeCord mode for multi-server networks.
@@ -49,20 +51,24 @@ Install VoiceCraft.Java on the proxy and every Paper backend. The proxy owns the
 
 ## Requirements
 
-- Java 21.
+- Java 17 for Minecraft 1.20.x, Java 21 for 1.21.x, and Java 25 for 26.x.
 - Paper for voice adapters and managed VoiceCraft runtime support.
 - Velocity or BungeeCord only when running a multi-server network.
 - Reachable UDP ports for every enabled voice adapter.
 
-When a VoiceCraft.Java adapter is enabled, it acts as the server endpoint for that client mod. Do not run the original Simple Voice Chat or Plasmo Voice server plugin on the same Paper instance using the same protocol channels or ports.
+Enable at least one official voice plugin/mod for the Java clients you want to support. VoiceCraft.Java can download the compatible dependency automatically, or you can install it yourself. The official plugin owns the client handshake and UDP transport; VoiceCraft.Java routes its final Opus frames through VoiceCraft Server.
 
 VoiceCraft.Java focuses on the shared experience that matters across clients: proximity audio, identity, speaking state, and voice controls. Client-exclusive features such as private Simple Voice Chat groups remain within their own ecosystem instead of being falsely emulated for other clients.
 
 ## Supported platforms
 
-- Paper
-- Purpur
+- Paper, Purpur, Folia, Spigot, and Bukkit
+- Fabric
+- Forge
+- NeoForge
 - Velocity
 - BungeeCord
+
+Minecraft 1.20.1 and newer are supported through per-version mod artifacts. Not every Minecraft/modloader combination has both upstream voice mods; VoiceCraft.Java keeps the available bridge working and logs a clear warning when an enabled adapter does not exist for that target.
 
 VoiceCraft.Java is licensed under the GNU Affero General Public License v3.0 or later.

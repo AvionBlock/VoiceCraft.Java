@@ -12,6 +12,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
+import team.avion.common.config.NativeVoiceConfigSynchronizer;
 import team.avion.common.localization.PluginLocalization;
 import team.avion.common.localization.Language;
 import team.avion.adapter.AdapterContext;
@@ -41,7 +42,7 @@ import java.util.Map;
  */
 public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private static final String CONFIG_VERSION_PATH = "config-version";
-    private static final int CURRENT_CONFIG_VERSION = 8;
+    private static final int CURRENT_CONFIG_VERSION = 9;
     private static final String[] REMOVED_VOICE_UI_PATHS = {
             "config.voice.status-icons",
             "config.voice.not-in-voice-symbol",
@@ -97,6 +98,13 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
     @Override
     public void onLoad() {
+        instance = this;
+        ensureLocalizedConfigExists();
+        reloadConfig();
+        if (migrateConfigIfNeeded()) {
+            reloadConfig();
+            synchronizeNativeVoiceConfigs(false);
+        }
         if (getServer().getPluginManager().getPlugin("PlasmoVoice") != null) {
             PaperPlasmoVoiceBridge bridge = new PaperPlasmoVoiceBridge(this);
             plasmoVoiceAdapter = bridge;
@@ -195,6 +203,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         lang = resolveConfiguredLanguage();
         Logger.info(Language.getMessage(lang, "plugin-config-loaded"));
         Logger.info(Language.getMessage(lang, "plugin-command-executor"));
+        synchronizeNativeVoiceConfigs(true);
 
         boolean newUsesProxy = getConfig().getBoolean("config.proxy.enabled", false);
         String newHost = getTransportHost();
@@ -558,7 +567,49 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     }
 
     public int getManagedVoicePort() {
-        return getConfig().getInt(MANAGED_VOICE_PORT_PATH, 1111);
+        return getConfig().getInt(MANAGED_VOICE_PORT_PATH, 9050);
+    }
+
+    private void synchronizeNativeVoiceConfigs(boolean runtimeReload) {
+        try {
+            String root = "config.adapters.native-configs";
+            NativeVoiceConfigSynchronizer.Settings settings = new NativeVoiceConfigSynchronizer.Settings(
+                    NativeVoiceConfigSynchronizer.Owner.parse(getConfig().getString(root + ".owner", "voicecraft")),
+                    nativeEndpoint(root + ".simple-voice-chat", "config.adapters.simple-voice-chat.enabled",
+                            "", 24454, "", 24454),
+                    nativeEndpoint(root + ".plasmo", "config.adapters.plasmo.enabled",
+                            "0.0.0.0", 0, "0.0.0.0", 0));
+            File pluginsDirectory = getDataFolder().getParentFile();
+            NativeVoiceConfigSynchronizer.Result result = NativeVoiceConfigSynchronizer.synchronize(
+                    pluginsDirectory.toPath().resolve("voicechat/voicechat-server.properties"),
+                    pluginsDirectory.toPath().resolve("PlasmoVoice/config.toml"), settings);
+            if (result.changed()) {
+                String changed = (result.simpleVoiceChatChanged() ? "Simple Voice Chat" : "")
+                        + (result.simpleVoiceChatChanged() && result.plasmoVoiceChanged() ? " and " : "")
+                        + (result.plasmoVoiceChanged() ? "Plasmo Voice" : "");
+                if (runtimeReload) {
+                    Logger.warn("Updated native port configuration for " + changed
+                            + ". Restart the server to reopen their UDP listeners on the new ports.");
+                } else {
+                    Logger.info("Applied VoiceCraft-managed native port configuration for " + changed + ".");
+                }
+            }
+        } catch (IllegalArgumentException exception) {
+            Logger.error("Native voice configuration ownership is invalid: " + exception.getMessage());
+        } catch (IOException exception) {
+            Logger.error("Unable to synchronize native voice port configuration: " + exception.getMessage());
+        }
+    }
+
+    private NativeVoiceConfigSynchronizer.Endpoint nativeEndpoint(String root, String enabledPath,
+            String defaultBindAddress, int defaultBindPort, String defaultAdvertisedHost,
+            int defaultAdvertisedPort) {
+        return new NativeVoiceConfigSynchronizer.Endpoint(
+                getConfig().getBoolean(enabledPath, false),
+                getConfig().getString(root + ".bind-address", defaultBindAddress),
+                getConfig().getInt(root + ".bind-port", defaultBindPort),
+                getConfig().getString(root + ".advertised-host", defaultAdvertisedHost),
+                getConfig().getInt(root + ".advertised-port", defaultAdvertisedPort));
     }
 
     private String getTransportHost() {

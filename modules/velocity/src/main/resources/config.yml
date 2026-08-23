@@ -11,7 +11,7 @@ config:
       port: 9050
       login-token: "__GENERATED_LOGIN_TOKEN__"
     voice:
-      port: 1111
+      port: 9050
 
   voice:
     proximity-distance: 30

@@ -2,6 +2,8 @@ plugins {
     id 'base'
 }
 
+import groovy.json.JsonSlurper
+
 group = 'team.avion'
 version = project.hasProperty('VERSION') ? project.VERSION : '2.0.0-SNAPSHOT'
 description = 'VoiceCraft.Java — the ultimate cross-client proximity voice chat plugin connecting VoiceCraft, Simple Voice Chat, and Plasmo Voice across Java and Bedrock.'
@@ -10,7 +12,9 @@ ext {
     pluginName = 'VoiceCraft.Java'
     pluginUrl = 'https://java.voicecraft.chat'
     pluginAuthor = 'lil-jon-crunk'
-    javaTarget = JavaVersion.VERSION_21
+    // Common code must remain loadable on the oldest supported Minecraft line (1.20.1).
+    // Individual Minecraft targets override their toolchain when the game requires Java 21/25.
+    javaTarget = JavaVersion.VERSION_17
     voiceCraft = [
         gitlabBaseUrl      : 'https://gitlab.avion.team',
         gitlabProjectPath  : 'voicecraft/VoiceCraft',
@@ -19,7 +23,7 @@ ext {
         executableBaseName : 'VoiceCraft.Server',
         protocolMajor      : 1,
         protocolMinor      : 7,
-        protocolPatch      : 0
+        protocolPatch      : 1
     ]
 }
 
@@ -77,4 +81,143 @@ subprojects {
         useJUnitPlatform()
         systemProperty 'file.encoding', 'UTF-8'
     }
+}
+
+tasks.register('printVoiceTargets') {
+    group = 'voicecraft'
+    description = 'Prints every supported Minecraft/modloader target and its native adapter capabilities.'
+    doLast {
+        new JsonSlurper().parse(file('gradle/voice-targets.json')).each { target ->
+            println("${target.name}: SVC=${target.simpleVoiceChat}, Plasmo=${target.plasmoVoice}, Java=${target.java}")
+        }
+    }
+}
+
+tasks.register('writeVoiceTargetList') {
+    group = 'voicecraft'
+    description = 'Writes the canonical CI/release target list, one target per line.'
+    def catalogFile = file('gradle/voice-targets.json')
+    def outputFile = layout.buildDirectory.file('voice-targets.txt')
+    inputs.file(catalogFile)
+    outputs.file(outputFile)
+    doLast {
+        def names = new JsonSlurper().parse(catalogFile).collect { it.name.toString() }
+        def target = outputFile.get().asFile
+        target.parentFile.mkdirs()
+        target.text = names.join(System.lineSeparator()) + System.lineSeparator()
+    }
+}
+
+tasks.register('stageVoiceTargetArtifact') {
+    group = 'distribution'
+    description = 'Builds and stages exactly one final mod JAR for -PvoiceTarget.'
+    def requestedTarget = providers.gradleProperty('voiceTarget').orNull
+    if (requestedTarget != null) {
+        def selected = new JsonSlurper().parse(file('gradle/voice-targets.json'))
+                .find { it.name.toString() == requestedTarget }
+        if (selected == null) {
+            throw new GradleException("Unknown VoiceCraft target '${requestedTarget}'.")
+        }
+        dependsOn(":${selected.loader}:build")
+        doLast {
+            def source = project(":${selected.loader}").layout.buildDirectory.file(
+                    "libs/${rootProject.ext.pluginName}-${selected.loader}-${project.version}-${selected.minecraft}.jar")
+                    .get().asFile
+            if (!source.isFile()) {
+                throw new GradleException("Final target artifact was not produced: ${source}")
+            }
+            def output = providers.gradleProperty('voiceDistDir').orElse('dist').get()
+            copy {
+                from source
+                into rootProject.file(output)
+            }
+        }
+    } else {
+        doFirst {
+            throw new GradleException('stageVoiceTargetArtifact requires -PvoiceTarget=<catalog target>.')
+        }
+    }
+}
+
+tasks.register('stageServerArtifacts') {
+    group = 'distribution'
+    description = 'Builds and stages the final Paper, Velocity and BungeeCord JARs.'
+    dependsOn ':paper:build', ':velocity:build', ':bungeecord:build'
+    doLast {
+        def output = providers.gradleProperty('voiceDistDir').orElse('dist').get()
+        ['paper', 'velocity', 'bungeecord'].each { platform ->
+            def source = project(":${platform}").layout.buildDirectory.file(
+                    "libs/${rootProject.ext.pluginName}-${platform}-${project.version}.jar").get().asFile
+            if (!source.isFile()) {
+                throw new GradleException("Final server artifact was not produced: ${source}")
+            }
+            copy {
+                from source
+                into rootProject.file(output)
+            }
+        }
+    }
+}
+
+tasks.register('verifyGitLabTargetMatrix') {
+    group = 'verification'
+    description = 'Ensures every catalog target is represented by the GitLab build matrix.'
+    def catalogFile = file('gradle/voice-targets.json')
+    def pipelineFile = file('.gitlab-ci.yml')
+    inputs.files(catalogFile, pipelineFile)
+    doLast {
+        def pipeline = pipelineFile.getText('UTF-8')
+        def missing = new JsonSlurper().parse(catalogFile)
+                .collect { it.name.toString() }
+                .findAll { !pipeline.contains("- ${it}") }
+        if (!missing.isEmpty()) {
+            throw new GradleException("GitLab CI target matrix is missing: ${missing}")
+        }
+    }
+}
+
+tasks.register('verifyVoiceTargetCatalog') {
+    group = 'verification'
+    def catalogFile = file('gradle/voice-targets.json')
+    inputs.file(catalogFile)
+    doLast {
+        def targets = new JsonSlurper().parse(catalogFile)
+        def duplicateNames = targets.groupBy { it.name }.findAll { _, values -> values.size() > 1 }.keySet()
+        if (!duplicateNames.isEmpty()) {
+            throw new GradleException("Duplicate VoiceCraft targets: ${duplicateNames}")
+        }
+        targets.each { target ->
+            if (!(target.loader in ['fabric', 'forge', 'neoforge'])) {
+                throw new GradleException("Unsupported loader in ${target.name}: ${target.loader}")
+            }
+            if (target.loader == 'quilt') {
+                throw new GradleException('Quilt must not be present in the supported target catalog.')
+            }
+            if (!target.simpleVoiceChat && !target.plasmoVoice) {
+                throw new GradleException("Target ${target.name} has no upstream voice mod.")
+            }
+            if (!target.name.endsWith("-${target.loader}")) {
+                throw new GradleException("Target name ${target.name} does not match loader ${target.loader}.")
+            }
+            def required = ['minecraft', 'minecraftDependency', 'java'] + (target.loader == 'fabric'
+                    ? ['fabricLoader', 'fabricApi', 'fabricPermissions']
+                    : [target.loader])
+            required.each { field ->
+                if (target[field] == null || target[field].toString().isBlank()) {
+                    throw new GradleException("Target ${target.name} is missing ${field}.")
+                }
+            }
+            if (target.modrinthGameVersions != null
+                    && (!(target.modrinthGameVersions instanceof List)
+                    || target.modrinthGameVersions.isEmpty()
+                    || target.modrinthGameVersions.any { it == null || it.toString().isBlank() })) {
+                throw new GradleException("Target ${target.name} has invalid modrinthGameVersions metadata.")
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyVoiceTargetCatalog')
+    dependsOn tasks.named('verifyGitLabTargetMatrix')
 }

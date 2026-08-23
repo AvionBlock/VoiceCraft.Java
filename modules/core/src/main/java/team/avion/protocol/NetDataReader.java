@@ -1,5 +1,6 @@
 package team.avion.protocol;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -58,8 +59,22 @@ public final class NetDataReader {
         return littleEndian(4).getInt();
     }
 
+    public long getUint() {
+        return Integer.toUnsignedLong(getInt());
+    }
+
     public long getLong() {
         return littleEndian(8).getLong();
+    }
+
+    public BigInteger getUlong() {
+        byte[] littleEndian = new byte[8];
+        getBytes(littleEndian, littleEndian.length);
+        byte[] bigEndian = new byte[9];
+        for (int index = 0; index < littleEndian.length; index++) {
+            bigEndian[bigEndian.length - 1 - index] = littleEndian[index];
+        }
+        return new BigInteger(bigEndian);
     }
 
     public int getByte() {

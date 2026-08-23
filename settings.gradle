@@ -5,7 +5,19 @@ pluginManagement {
             name = 'Fabric'
             url = 'https://maven.fabricmc.net/'
         }
+        maven {
+            name = 'Forge'
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            name = 'NeoForge'
+            url = 'https://maven.neoforged.net/releases'
+        }
     }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'VoiceCraft.Java'
@@ -13,6 +25,8 @@ include 'core'
 include 'adapter-api'
 include 'paper'
 include 'fabric'
+include 'forge'
+include 'neoforge'
 include 'velocity'
 include 'bungeecord'
 
@@ -20,5 +34,17 @@ project(':core').projectDir = file('modules/core')
 project(':adapter-api').projectDir = file('modules/adapter-api')
 project(':paper').projectDir = file('modules/paper')
 project(':fabric').projectDir = file('modules/fabric')
+def selectedFabricTarget = gradle.startParameter.projectProperties['fabricTarget'] ?:
+        gradle.startParameter.projectProperties['voiceTarget']
+if (selectedFabricTarget != null && selectedFabricTarget.startsWith('26.') && selectedFabricTarget.endsWith('-fabric')) {
+    project(':fabric').buildFileName = 'build-26.gradle'
+}
+project(':forge').projectDir = file('modules/forge')
+def selectedVoiceTarget = gradle.startParameter.projectProperties['forgeTarget'] ?:
+        gradle.startParameter.projectProperties['voiceTarget']
+if (selectedVoiceTarget == '1.20.1-forge') {
+    project(':forge').buildFileName = 'build-legacy.gradle'
+}
+project(':neoforge').projectDir = file('modules/neoforge')
 project(':velocity').projectDir = file('modules/velocity')
 project(':bungeecord').projectDir = file('modules/bungeecord')

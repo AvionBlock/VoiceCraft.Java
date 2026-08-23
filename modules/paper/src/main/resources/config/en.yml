@@ -1,4 +1,4 @@
-config-version: 8 # DO NOT EDIT: used for automatic config migrations
+config-version: 9 # DO NOT EDIT: used for automatic config migrations
 
 config:
   debug: false                   # Enable additional debug logging
@@ -12,6 +12,18 @@ config:
     client-priority: ["simple-voice-chat", "plasmo"] # Preferred client when a player has both mods
     managed-dependencies:
       enabled: true              # Download missing official server plugins from Modrinth; restart required
+    native-configs:
+      owner: "voicecraft"        # voicecraft: manage native ports here; native: use each voice mod's own config
+      simple-voice-chat:
+        bind-address: ""         # Empty uses server-ip; * binds every interface
+        bind-port: 24454          # UDP port opened by Simple Voice Chat
+        advertised-host: ""      # Empty lets the client use the Minecraft server host
+        advertised-port: 24454   # UDP port advertised to Simple Voice Chat clients
+      plasmo:
+        bind-address: "0.0.0.0"  # Address used by the Plasmo Voice UDP listener
+        bind-port: 0              # 0 uses the Minecraft server port
+        advertised-host: "0.0.0.0" # 0.0.0.0 lets clients use the Minecraft server host
+        advertised-port: 0       # 0 uses the Plasmo bind port
     plasmo:
       enabled: false             # Bridge the official Plasmo Voice plugin through VoiceCraft
       install:
@@ -27,7 +39,7 @@ config:
       port: 9050                 # VoiceCraft TCP port
       login-token: "__GENERATED_LOGIN_TOKEN__" # VoiceCraft LoginToken
     voice:
-      port: 1111                 # Managed VoiceCraft voice port
+      port: 9050                 # Managed VoiceCraft public UDP voice port
     auto-start: true             # Start managed VoiceCraft automatically
     shutdown-on-disable: true    # Stop managed VoiceCraft when the plugin disables
     invariant-globalization: true # Run .NET without system ICU packages

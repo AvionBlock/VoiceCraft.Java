@@ -4,23 +4,56 @@ stages:
   - test
   - build
   - release
+  - publish
 
 variables:
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
   RELEASE_VERSION:
-    value: "0.1.0"
-    description: "Release version without channel suffix, for example 2.0.0 or v2.0.0."
+    value: "2.0.0-beta.2"
+    description: "Exact artifact/version number, including any suffix (for example 2.0.0-beta.2)."
   RELEASE_CHANNEL:
     value: "beta"
-    options:
-      - "beta"
-      - "stable"
-      - "alpha"
-    description: "Release channel. Stable uses RELEASE_VERSION as-is; beta/alpha append the channel suffix."
+    options: ["release", "beta", "alpha"]
+    description: "Modrinth release channel. This does not rewrite RELEASE_VERSION."
+  RELEASE_TITLE:
+    value: "VoiceCraft.Java 2.0.0 Beta 2"
+    description: "Base title shown in GitLab and in every Modrinth platform version."
+  RELEASE_TAG:
+    value: "v2.0.0-beta.2"
+    description: "Git tag used when CREATE_GITLAB_RELEASE is true."
+  RELEASE_CHANGELOG:
+    value: "See the GitLab release notes for this build."
+    description: "Markdown changelog sent to GitLab and Modrinth. Multiline values are supported."
+  CREATE_GITLAB_RELEASE:
+    value: "false"
+    options: ["false", "true"]
+    description: "Create a tagged GitLab Release after the manual release build."
+  PUBLISH_MODRINTH:
+    value: "false"
+    options: ["false", "true"]
+    description: "Expose the manual Modrinth publication job."
+  MODRINTH_PROJECT_ID:
+    value: "WtPu56Wa"
+    description: "VoiceCraft.Java Modrinth project ID or slug."
+  MODRINTH_STATUS:
+    value: "listed"
+    options: ["listed", "unlisted", "draft"]
+    description: "Visibility of newly created Modrinth versions."
+  MODRINTH_FEATURED:
+    value: "false"
+    options: ["false", "true"]
+    description: "Mark every uploaded platform version as featured."
+  MODRINTH_DRY_RUN:
+    value: "true"
+    options: ["true", "false"]
+    description: "Validate files and print all Modrinth metadata without uploading. Set false to publish."
+  MODRINTH_EXISTING:
+    value: "skip"
+    options: ["skip", "fail"]
+    description: "How retries handle version numbers that already exist on Modrinth."
 
 default:
-  tags:
-    - ubuntu-docker
+  tags: [ubuntu-docker]
   before_script:
     - chmod +x gradlew
 
@@ -33,95 +66,161 @@ cache:
 test:
   stage: test
   script:
-    - ./gradlew test --no-daemon
+    - ./gradlew test verifyVoiceTargetCatalog verifyGitLabTargetMatrix --no-daemon --console=plain
   artifacts:
     when: always
     expire_in: 1 week
     reports:
-      junit:
-        - "**/build/test-results/test/*.xml"
+      junit: "**/build/test-results/test/*.xml"
 
-build:
+build_server_plugins:
   stage: build
-  needs:
-    - test
+  needs: [test]
   script:
-    - ./gradlew clean build --no-daemon
-    - mkdir -p dist
-    - |
-      find modules -path "*/build/libs/VoiceCraft.Java-*.jar" \
-        ! -name "*-sources.jar" \
-        ! -name "*-thin.jar" \
-        -exec cp {} dist/ \;
+    - ./gradlew stageServerArtifacts -PvoiceDistDir=dist --no-daemon --configure-on-demand --console=plain
     - test -n "$(find dist -name '*.jar' -print -quit)"
   artifacts:
-    name: "voicecraft-java-$CI_COMMIT_REF_SLUG"
-    when: always
+    name: "voicecraft-java-servers-$CI_COMMIT_REF_SLUG"
     expire_in: 1 week
-    paths:
-      - dist/*.jar
+    paths: [dist/*.jar]
+
+.mod_build:
+  stage: build
+  needs: [test]
+  script:
+    - ./gradlew stageVoiceTargetArtifact -PvoiceTarget="$VOICE_TARGET" -PvoiceDistDir=dist --no-daemon --configure-on-demand --console=plain
+    - test -n "$(find dist -name '*.jar' -print -quit)"
+  artifacts:
+    name: "voicecraft-java-$VOICE_TARGET"
+    expire_in: 1 week
+    paths: [dist/*.jar]
+
+build_mods_java21:
+  extends: .mod_build
+  parallel:
+    matrix:
+      - VOICE_TARGET:
+          - 1.20.1-fabric
+          - 1.20.1-forge
+          - 1.20.4-fabric
+          - 1.20.4-forge
+          - 1.21.1-fabric
+          - 1.21.1-forge
+          - 1.21.1-neoforge
+          - 1.21.4-fabric
+          - 1.21.4-forge
+          - 1.21.4-neoforge
+          - 1.21.5-fabric
+          - 1.21.5-forge
+          - 1.21.5-neoforge
+          - 1.21.6-fabric
+          - 1.21.6-neoforge
+          - 1.21.8-fabric
+          - 1.21.8-forge
+          - 1.21.8-neoforge
+          - 1.21.10-fabric
+          - 1.21.10-forge
+          - 1.21.10-neoforge
+          - 1.21.11-fabric
+          - 1.21.11-forge
+          - 1.21.11-neoforge
+
+build_mods_java25:
+  extends: .mod_build
+  image: eclipse-temurin:25-jdk
+  parallel:
+    matrix:
+      - VOICE_TARGET:
+          - 26.1-fabric
+          - 26.1-forge
+          - 26.1-neoforge
+          - 26.2-fabric
+          - 26.2-forge
+          - 26.2-neoforge
 
 release_build:
   stage: release
-  needs:
-    - test
+  image: eclipse-temurin:25-jdk
+  needs: [test]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
     - when: never
+  allow_failure: false
+  manual_confirmation: "Build and package every supported VoiceCraft.Java platform/version?"
   script:
+    - test -n "$RELEASE_VERSION"
+    - ./gradlew clean stageServerArtifacts writeVoiceTargetList -PvoiceDistDir=release-artifacts -PVERSION="$RELEASE_VERSION" --no-daemon --configure-on-demand --console=plain
     - |
-      if [ "$RELEASE_CHANNEL" = "stable" ]; then
-        BUILD_VERSION="$RELEASE_VERSION"
-        RELEASE_TAG="$RELEASE_VERSION"
-        RELEASE_DESCRIPTION="VoiceCraft.Java $RELEASE_VERSION"
-      else
-        BUILD_VERSION="$RELEASE_VERSION-$RELEASE_CHANNEL"
-        RELEASE_TAG="$RELEASE_VERSION-$RELEASE_CHANNEL"
-        RELEASE_DESCRIPTION="VoiceCraft.Java $RELEASE_VERSION $RELEASE_CHANNEL"
-      fi
-      echo "BUILD_VERSION=$BUILD_VERSION" >> release.env
-      echo "RELEASE_TAG=$RELEASE_TAG" >> release.env
-      echo "RELEASE_DESCRIPTION=$RELEASE_DESCRIPTION" >> release.env
-      echo "RELEASE_BUILD_JOB_ID=$CI_JOB_ID" >> release.env
-      ./gradlew clean build -PVERSION="$BUILD_VERSION" --no-daemon
-    - mkdir -p release-artifacts
-    - |
-      find modules -path "*/build/libs/VoiceCraft.Java-*.jar" \
-        ! -name "*-sources.jar" \
-        ! -name "*-thin.jar" \
-        -exec cp {} release-artifacts/ \;
+      while IFS= read -r VOICE_TARGET; do
+        test -n "$VOICE_TARGET" || continue
+        ./gradlew stageVoiceTargetArtifact -PvoiceTarget="$VOICE_TARGET" -PvoiceDistDir=release-artifacts -PVERSION="$RELEASE_VERSION" --no-daemon --configure-on-demand --console=plain
+      done < build/voice-targets.txt
     - test -n "$(find release-artifacts -name '*.jar' -print -quit)"
+    - echo "RELEASE_BUILD_JOB_ID=$CI_JOB_ID" > release.env
   artifacts:
-    name: "voicecraft-java-release-$CI_COMMIT_REF_SLUG"
+    name: "voicecraft-java-$RELEASE_VERSION"
     when: always
     expire_in: 1 month
     reports:
       dotenv: release.env
-      junit:
-        - "**/build/test-results/test/*.xml"
+      junit: "**/build/test-results/test/*.xml"
     paths:
       - release-artifacts/*.jar
+      - gradle/voice-targets.json
 
 create_gitlab_release:
-  stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  stage: publish
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  variables:
+    GLAB_ENABLE_CI_AUTOLOGIN: "true"
   needs:
     - job: release_build
       artifacts: true
   before_script: []
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CREATE_GITLAB_RELEASE == "true"'
       when: on_success
     - when: never
   script:
     - echo "Creating GitLab release $RELEASE_TAG"
   release:
-    name: "$RELEASE_DESCRIPTION"
+    name: "$RELEASE_TITLE"
     tag_name: "$RELEASE_TAG"
     ref: "$CI_COMMIT_SHA"
-    description: "$RELEASE_DESCRIPTION"
+    description: "$RELEASE_CHANGELOG"
     assets:
       links:
-        - name: "Release artifacts"
+        - name: "All platform artifacts"
           url: "$CI_PROJECT_URL/-/jobs/$RELEASE_BUILD_JOB_ID/artifacts/download"
+
+publish_modrinth:
+  stage: publish
+  image: python:3.13-slim
+  needs:
+    - job: release_build
+      artifacts: true
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $PUBLISH_MODRINTH == "true"'
+      when: manual
+    - when: never
+  allow_failure: false
+  manual_confirmation: "Publish all packaged platform/version artifacts to Modrinth?"
+  script:
+    - test -n "$MODRINTH_PROJECT_ID"
+    - |
+      EXTRA_ARGS=""
+      if [ "$MODRINTH_DRY_RUN" = "true" ]; then EXTRA_ARGS="$EXTRA_ARGS --dry-run"; fi
+      if [ "$MODRINTH_FEATURED" = "true" ]; then EXTRA_ARGS="$EXTRA_ARGS --featured"; fi
+      python scripts/ci/publish_modrinth.py \
+        --artifacts release-artifacts \
+        --catalog gradle/voice-targets.json \
+        --project "$MODRINTH_PROJECT_ID" \
+        --version "$RELEASE_VERSION" \
+        --channel "$RELEASE_CHANNEL" \
+        --title "$RELEASE_TITLE" \
+        --changelog "$RELEASE_CHANGELOG" \
+        --status "$MODRINTH_STATUS" \
+        --existing "$MODRINTH_EXISTING" \
+        $EXTRA_ARGS

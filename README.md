@@ -29,11 +29,11 @@ In practice, VoiceCraft.Java is not just “a bridge to VoiceCraft”. It is the
 | Player client | Supported through | What the plugin does |
 | --- | --- | --- |
 | VoiceCraft client | VoiceCraft backend + `/voice bind` | Binds the external VoiceCraft session to the in-game player and updates position/effects. |
-| Simple Voice Chat | Paper adapter | Handles plugin-message/UDP handshake, creates a VoiceCraft entity, and forwards Opus audio. |
-| Plasmo Voice | Paper adapter | Handles Plasmo TCP/UDP protocol, creates a VoiceCraft entity, and forwards Opus audio. |
+| Simple Voice Chat | Native server plugin/mod adapter | Uses the official SVC API, creates a VoiceCraft entity, and forwards Opus audio. |
+| Plasmo Voice | Native server plugin/mod adapter | Uses the official Plasmo add-on API, creates a VoiceCraft entity, and forwards Opus audio. |
 | Bedrock players on Java cross-play servers | VoiceCraft client | Gives Bedrock players a voice path without requiring Java client mods. |
 
-When enabled together on Paper, Simple Voice Chat and Plasmo Voice clients are connected to the same VoiceCraft audio bridge. A player speaking from Simple Voice Chat can be heard by Plasmo Voice and VoiceCraft-client users, and the other way around.
+When enabled together on a supported server target, Simple Voice Chat and Plasmo Voice clients are connected to the same VoiceCraft audio bridge. A player speaking from Simple Voice Chat can be heard by Plasmo Voice and VoiceCraft-client users, and the other way around.
 
 ## Core Features
 
@@ -41,7 +41,7 @@ When enabled together on Paper, Simple Voice Chat and Plasmo Voice clients are c
 - Voice chat support for Bedrock players on Java cross-play servers through the VoiceCraft client.
 - Direct Paper mode for single-server setups.
 - Velocity and BungeeCord proxy mode for multi-server networks.
-- Proxy UDP relay for Simple Voice Chat and Plasmo Voice in Velocity/BungeeCord networks.
+- Velocity and BungeeCord coordination for multi-server VoiceCraft networks.
 - Managed VoiceCraft Server 1.7 runtime on Paper: automatic download, startup, runtime option sync, and shutdown.
 - Server-side player positioning, dimension tracking, proximity distance, cave echo, and muffle updates.
 - Binding flow for external VoiceCraft clients with short in-game bind keys.
@@ -71,7 +71,7 @@ This is the primary path for players who cannot use Java voice mods, including B
 
 ### Simple Voice Chat and Plasmo Voice Flow
 
-On Paper, VoiceCraft.Java bridges the official server plugins for Java voice mods.
+VoiceCraft.Java bridges the official server plugins/mods through their public APIs.
 
 ```text
 Simple Voice Chat client -> official SVC plugin -> VoiceCraft.Java bridge -> VoiceCraft Server
@@ -112,14 +112,16 @@ Simple Voice Chat and Plasmo Voice keep using their own official proxy/network s
 | Platform | Role |
 | --- | --- |
 | Paper | Direct/backend runtime, managed VoiceCraft Server process, native SVC and Plasmo bridges |
-| Fabric | Server runtime, managed VoiceCraft Server process, native SVC and Plasmo mod bridges |
+| Fabric 1.20.1+ | Server runtime, managed VoiceCraft Server process, native SVC and Plasmo mod bridges |
+| Forge 1.20.1+ | Server runtime with native SVC and/or Plasmo bridges where upstream provides them |
+| NeoForge 1.21.1+ | Server runtime with native SVC and/or Plasmo bridges where upstream provides them |
 | Velocity | Proxy runtime and central VoiceCraft connection |
 | BungeeCord | Proxy runtime and central VoiceCraft connection |
 
 ## Requirements
 
-- Java 21.
-- Paper, Fabric, Velocity, or BungeeCord.
+- Java 17 for Minecraft 1.20.x, Java 21 for Minecraft 1.21.x, and Java 25 for Minecraft 26.x.
+- Paper, Fabric, Forge, NeoForge, Velocity, or BungeeCord. Quilt is not supported.
 - VoiceCraft Server 1.7 backend, unless the managed runtime is enabled.
 - The official Simple Voice Chat and/or Plasmo Voice server plugin for enabled bridges (managed installation is available).
 
@@ -134,10 +136,10 @@ The project is currently built against:
 1. Download or build the jar for your platform.
 2. Put it into the server's `plugins` directory.
 3. Start the server once to generate `config.yml`.
-4. Configure the VoiceCraft connection and the required adapters.
+4. Configure the VoiceCraft connection and the required adapters. If an upstream voice mod is unavailable for this exact target, VoiceCraft.Java logs a warning and keeps the available adapters running.
 5. Restart the server or run `/voice reload`.
 
-Both adapters are disabled by default. Enabling one makes VoiceCraft.Java the server endpoint for that client mod, so its UDP port must be reachable by players and must not already be occupied by the original voice-chat server plugin.
+Both adapters are disabled by default. Enabling one uses the installed official voice mod and its public API; VoiceCraft.Java does not emulate the SVC or Plasmo wire protocol. When managed dependencies are enabled, a missing compatible official mod is downloaded into `mods/` or `plugins/` and activated after a restart.
 
 Build outputs:
 
@@ -145,6 +147,9 @@ Build outputs:
 modules/paper/build/libs/VoiceCraft.Java-paper-<version>.jar
 modules/velocity/build/libs/VoiceCraft.Java-velocity-<version>.jar
 modules/bungeecord/build/libs/VoiceCraft.Java-bungeecord-<version>.jar
+modules/fabric/build/libs/VoiceCraft.Java-fabric-<version>-<minecraft>.jar
+modules/forge/build/libs/VoiceCraft.Java-forge-<version>-<minecraft>.jar
+modules/neoforge/build/libs/VoiceCraft.Java-neoforge-<version>-<minecraft>.jar
 ```
 
 Use the shaded jars without the `thin` or `sources` classifier.
@@ -164,7 +169,7 @@ config:
       port: 9050
       login-token: "change-me"
     voice:
-      port: 1111
+      port: 9050
     auto-start: true
     shutdown-on-disable: true
 ```
@@ -225,6 +230,18 @@ config:
     client-priority: ["simple-voice-chat", "plasmo"]
     managed-dependencies:
       enabled: true
+    native-configs:
+      owner: "voicecraft" # Set to "native" to stop editing native voice configs
+      simple-voice-chat:
+        bind-address: ""
+        bind-port: 24454
+        advertised-host: ""
+        advertised-port: 24454
+      plasmo:
+        bind-address: "0.0.0.0"
+        bind-port: 0
+        advertised-host: "0.0.0.0"
+        advertised-port: 0
     simple-voice-chat:
       enabled: true
       install:
@@ -235,7 +252,17 @@ config:
         enabled: true
 ```
 
-When both client mods are present, `client-priority` selects one output transport and prevents duplicate audio. On Paper dependencies are staged in `plugins/`; on Fabric they are staged in `mods/`. A restart activates newly installed dependencies. The official plugins/mods retain ownership of their ports and transport configuration.
+When both client mods are present, `client-priority` selects one output transport and prevents duplicate audio. On Paper dependencies are staged in `plugins/`; on Fabric/Forge/NeoForge they are staged in `mods/`. A restart activates newly installed dependencies.
+
+With `native-configs.owner: "voicecraft"`, this file is the source of truth for the bind and advertised UDP ports. VoiceCraft.Java updates only SVC's `port`, `bind_address`, and `voice_host` properties and Plasmo's `[host]`/`[host.public]` address fields; all other native settings and comments are preserved. `/voice reload` writes changed values, but already-open UDP listeners require a server restart. Set the owner to `"native"` when the official mods should manage their own files instead.
+
+## GitLab releases and Modrinth
+
+Every pipeline runs tests and exposes final shaded Paper, Velocity, BungeeCord, Fabric, Forge, and NeoForge JARs as GitLab artifacts. Mod targets are built as a parallel matrix and validated against `gradle/voice-targets.json`.
+
+For a release, run a pipeline from the GitLab UI and set the exact `RELEASE_VERSION`, channel, title, tag, and Markdown changelog. Start the manual `release_build` job to build every supported target. To publish, set `PUBLISH_MODRINTH=true`, keep `MODRINTH_DRY_RUN=true` for the first metadata/file validation, then run again with it set to `false`. Store `MODRINTH_TOKEN` as a masked, protected GitLab CI/CD variable; never put the token in this file or the repository.
+
+Fabric versions declare Fabric API as required on Modrinth. Simple Voice Chat and Plasmo Voice are declared optional only for targets where their adapters exist. Fabric Permissions API is embedded in the Fabric JAR and therefore is not published as an external dependency.
 
 ## Commands
 

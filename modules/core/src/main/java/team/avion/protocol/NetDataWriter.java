@@ -1,5 +1,6 @@
 package team.avion.protocol;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -51,8 +52,24 @@ public final class NetDataWriter {
         putBytes(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array(), 0, 4);
     }
 
+    public void putUint(long value) {
+        putInt((int) (value & 0xFFFF_FFFFL));
+    }
+
     public void putLong(long value) {
         putBytes(ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array(), 0, 8);
+    }
+
+    public void putUlong(BigInteger value) {
+        if (value == null || value.signum() < 0 || value.bitLength() > 64) {
+            throw new IllegalArgumentException("Unsigned long must be between 0 and 2^64-1");
+        }
+        byte[] bigEndian = value.toByteArray();
+        byte[] littleEndian = new byte[8];
+        for (int index = 0; index < Math.min(bigEndian.length, 8); index++) {
+            littleEndian[index] = bigEndian[bigEndian.length - 1 - index];
+        }
+        putBytes(littleEndian, 0, littleEndian.length);
     }
 
     public void putByte(int value) {

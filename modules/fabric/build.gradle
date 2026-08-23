@@ -2,20 +2,48 @@ plugins {
     id 'fabric-loom' version '1.17.12'
 }
 
+import groovy.json.JsonSlurper
+
 description = 'Fabric adapter for VoiceCraft.Java.'
 def pluginVersion = project.version.toString()
-def minecraftVersion = providers.gradleProperty('mcVersion').orElse('1.21.11').get()
-def yarnVersion = providers.gradleProperty('yarnVersion').orElse("${minecraftVersion}+build.6").get()
-def fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').orElse('0.19.3').get()
-def fabricApiVersion = providers.gradleProperty('fabricApiVersion').orElse('0.141.5+1.21.11').get()
-def minecraftDependency = providers.gradleProperty('minecraftDependency').orElse('>=1.21.11').get()
+def targetCatalog = new JsonSlurper().parse(rootProject.file('gradle/voice-targets.json'))
+def globalTargetName = providers.gradleProperty('voiceTarget').orNull
+def requestedTargetName = providers.gradleProperty('fabricTarget').orNull ?:
+        (targetCatalog.any { it.name == globalTargetName && it.loader == 'fabric' } ? globalTargetName : '1.21.11-fabric')
+def selectedTarget = targetCatalog.find { it.name == requestedTargetName }
+if (selectedTarget == null) {
+    throw new GradleException("Unknown VoiceCraft target '${requestedTargetName}'. See gradle/voice-targets.json.")
+}
+def minecraftVersion = providers.gradleProperty('mcVersion').orElse(selectedTarget.minecraft.toString()).get()
+def fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').orElse(selectedTarget.fabricLoader.toString()).get()
+def fabricApiVersion = providers.gradleProperty('fabricApiVersion').orElse(selectedTarget.fabricApi.toString()).get()
+def fabricPermissionsVersion = providers.gradleProperty('fabricPermissionsVersion').orElse(selectedTarget.fabricPermissions.toString()).get()
+def minecraftDependency = providers.gradleProperty('minecraftDependency').orElse(selectedTarget.minecraftDependency.toString()).get()
 def minecraftArchiveVersion = minecraftVersion.replaceAll('[^A-Za-z0-9._-]', '_')
+def targetJavaVersion = providers.gradleProperty('targetJavaVersion').orElse(selectedTarget.java.toString()).get().toInteger()
+def simpleVoiceChatAvailable = selectedTarget.simpleVoiceChat as boolean
+def plasmoVoiceAvailable = selectedTarget.plasmoVoice as boolean
+
+sourceSets.main.java.srcDir(rootProject.file('modules/mod-runtime/src/main/java'))
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    if (targetJavaVersion > 21) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = targetJavaVersion
+}
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraftVersion}"
-    mappings "net.fabricmc:yarn:${yarnVersion}:v2"
+    mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${fabricLoaderVersion}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+    modImplementation "me.lucko:fabric-permissions-api:${fabricPermissionsVersion}"
 
     implementation project(':core')
     implementation project(':adapter-api')
@@ -31,6 +59,7 @@ dependencies {
     include 'com.google.code.gson:gson:2.13.2'
     include 'org.yaml:snakeyaml:2.4'
     include 'net.kyori:adventure-api:4.25.0'
+    include "me.lucko:fabric-permissions-api:${fabricPermissionsVersion}"
 }
 
 processResources {
@@ -39,7 +68,11 @@ processResources {
         description        : rootProject.description,
         minecraftDependency: minecraftDependency,
         fabricLoaderVersion: fabricLoaderVersion,
-        fabricApiVersion   : fabricApiVersion
+        fabricApiVersion   : fabricApiVersion,
+        targetName         : requestedTargetName,
+        simpleVoiceChatAvailable: simpleVoiceChatAvailable,
+        plasmoVoiceAvailable: plasmoVoiceAvailable,
+        targetJavaVersion  : targetJavaVersion
     ])
 
     filesMatching('fabric.mod.json') {
@@ -48,7 +81,16 @@ processResources {
             description: rootProject.description,
             minecraftDependency: minecraftDependency,
             fabricLoaderVersion: fabricLoaderVersion,
-            fabricApiVersion: fabricApiVersion
+            fabricApiVersion: fabricApiVersion,
+            targetJavaVersion: targetJavaVersion
+        )
+    }
+    filesMatching('voicecraft-target.properties') {
+        expand(
+            targetName: requestedTargetName,
+            minecraftVersion: minecraftVersion,
+            simpleVoiceChatAvailable: simpleVoiceChatAvailable,
+            plasmoVoiceAvailable: plasmoVoiceAvailable
         )
     }
 }
@@ -89,9 +131,14 @@ tasks.register('printFabricTarget') {
     doLast {
         println("Fabric target:")
         println("  minecraft=${minecraftVersion}")
-        println("  yarn=${yarnVersion}")
+        println("  mappings=official Mojang")
         println("  loader=${fabricLoaderVersion}")
         println("  fabric-api=${fabricApiVersion}")
+        println("  fabric-permissions-api=${fabricPermissionsVersion}")
         println("  metadata minecraft=${minecraftDependency}")
+        println("  java=${targetJavaVersion}")
+        println("  target=${requestedTargetName}")
+        println("  simple-voice-chat=${simpleVoiceChatAvailable}")
+        println("  plasmo=${plasmoVoiceAvailable}")
     }
 }

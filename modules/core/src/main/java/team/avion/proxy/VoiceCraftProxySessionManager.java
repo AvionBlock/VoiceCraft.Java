@@ -18,19 +18,21 @@ import team.avion.protocol.McPackets.OnNetworkEntityCreatedPacket;
 import team.avion.protocol.McPackets.PingRequestPacket;
 import team.avion.protocol.McPackets.ProximityEffect;
 import team.avion.protocol.McPackets.SetEffectRequestPacket;
-import team.avion.protocol.McPackets.SetEntityCaveFactorRequestPacket;
 import team.avion.protocol.McPackets.SetEntityDescriptionRequestPacket;
 import team.avion.protocol.McPackets.SetEntityEffectBitmaskRequestPacket;
-import team.avion.protocol.McPackets.SetEntityMuffleFactorRequestPacket;
 import team.avion.protocol.McPackets.SetEntityNameRequestPacket;
 import team.avion.protocol.McPackets.SetEntityPositionRequestPacket;
+import team.avion.protocol.McPackets.SetEntityPropertyRequestPacket;
 import team.avion.protocol.McPackets.SetEntityRotationRequestPacket;
 import team.avion.protocol.McPackets.SetEntityWorldIdRequestPacket;
 import team.avion.protocol.McProtocolTypes.Vector2;
 import team.avion.protocol.McProtocolTypes.Vector3;
+import team.avion.protocol.McProtocolEnums.PropertyType;
 
 public final class VoiceCraftProxySessionManager {
     private static final int EFFECT_BITMASK_PROXIMITY = 1;
+    private static final String PROXIMITY_ECHO_FACTOR_PROPERTY = "ProximityEchoEffect:Factor";
+    private static final String PROXIMITY_MUFFLE_FACTOR_PROPERTY = "ProximityMuffleEffect:Factor";
 
     private final McApiTcpClient client;
     private final SecureRandom random = new SecureRandom();
@@ -191,9 +193,9 @@ public final class VoiceCraftProxySessionManager {
                     new Vector3((float) snapshot.x(), (float) snapshot.y(), (float) snapshot.z())));
             packets.add(vector2Packet(new SetEntityRotationRequestPacket(), boundEntity.entityId(),
                     new Vector2(0.0f, (float) snapshot.rotation())));
-            packets.add(floatPacket(new SetEntityCaveFactorRequestPacket(), boundEntity.entityId(),
+            packets.add(floatPropertyPacket(boundEntity.entityId(), PROXIMITY_ECHO_FACTOR_PROPERTY,
                     voiceEffects ? (float) snapshot.echoFactor() : 0.0f));
-            packets.add(floatPacket(new SetEntityMuffleFactorRequestPacket(), boundEntity.entityId(),
+            packets.add(floatPropertyPacket(boundEntity.entityId(), PROXIMITY_MUFFLE_FACTOR_PROPERTY,
                     voiceEffects && snapshot.muffled() ? 1.0f : 0.0f));
         }
 
@@ -281,9 +283,9 @@ public final class VoiceCraftProxySessionManager {
                 new Vector3((float) snapshot.x(), (float) snapshot.y(), (float) snapshot.z())));
         packets.add(vector2Packet(new SetEntityRotationRequestPacket(), pendingEntity.entityId(),
                 new Vector2(0.0f, (float) snapshot.rotation())));
-        packets.add(floatPacket(new SetEntityCaveFactorRequestPacket(), pendingEntity.entityId(),
+        packets.add(floatPropertyPacket(pendingEntity.entityId(), PROXIMITY_ECHO_FACTOR_PROPERTY,
                 voiceEffects ? (float) snapshot.echoFactor() : 0.0f));
-        packets.add(floatPacket(new SetEntityMuffleFactorRequestPacket(), pendingEntity.entityId(),
+        packets.add(floatPropertyPacket(pendingEntity.entityId(), PROXIMITY_MUFFLE_FACTOR_PROPERTY,
                 voiceEffects && snapshot.muffled() ? 1.0f : 0.0f));
 
         processPackets(client.exchange(packets));
@@ -378,17 +380,11 @@ public final class VoiceCraftProxySessionManager {
         return packet;
     }
 
-    private static SetEntityCaveFactorRequestPacket floatPacket(SetEntityCaveFactorRequestPacket packet, int entityId,
-            float value) {
+    private static SetEntityPropertyRequestPacket floatPropertyPacket(int entityId, String key, float value) {
+        SetEntityPropertyRequestPacket packet = new SetEntityPropertyRequestPacket();
         packet.Id = entityId;
-        packet.Value = value;
-        return packet;
-    }
-
-    private static SetEntityMuffleFactorRequestPacket floatPacket(SetEntityMuffleFactorRequestPacket packet,
-            int entityId,
-            float value) {
-        packet.Id = entityId;
+        packet.Key = key;
+        packet.PropertyTypeValue = PropertyType.FLOAT;
         packet.Value = value;
         return packet;
     }

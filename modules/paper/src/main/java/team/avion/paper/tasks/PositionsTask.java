@@ -76,6 +76,8 @@ public class PositionsTask extends BukkitRunnable {
             return;
         }
 
+        plugin.getVoiceEndpointRegistry().retryPending();
+
         List<ProxyPlayerSnapshot> snapshots = players.stream()
                 .map(this::getPlayerSnapshot)
                 .toList();

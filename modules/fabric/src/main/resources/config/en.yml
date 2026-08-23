@@ -1,4 +1,4 @@
-config-version: 2
+config-version: 3
 
 config:
   debug: false
@@ -9,6 +9,18 @@ config:
     client-priority: ["simple-voice-chat", "plasmo"]
     managed-dependencies:
       enabled: true
+    native-configs:
+      owner: "voicecraft"
+      simple-voice-chat:
+        bind-address: ""
+        bind-port: 24454
+        advertised-host: ""
+        advertised-port: 24454
+      plasmo:
+        bind-address: "0.0.0.0"
+        bind-port: 0
+        advertised-host: "0.0.0.0"
+        advertised-port: 0
     simple-voice-chat:
       enabled: false
       install:
@@ -24,7 +36,7 @@ config:
       port: 9050
       login-token: "__GENERATED_LOGIN_TOKEN__"
     voice:
-      port: 1111
+      port: 9050
     auto-start: true
     shutdown-on-disable: true
     invariant-globalization: true

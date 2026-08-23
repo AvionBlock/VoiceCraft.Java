@@ -13,6 +13,9 @@
   "license": "GPL-3.0-or-later",
   "environment": "server",
   "entrypoints": {
+    "preLaunch": [
+      "team.avion.fabric.FabricNativeVoiceConfigPreLaunch"
+    ],
     "main": [
       "team.avion.fabric.VoiceCraftJava"
     ],
@@ -24,7 +27,7 @@
     "fabricloader": ">=${fabricLoaderVersion}",
     "fabric-api": ">=${fabricApiVersion}",
     "minecraft": "${minecraftDependency}",
-    "java": ">=21"
+    "java": ">=${targetJavaVersion}"
   },
   "suggests": {
     "voicechat": "*",

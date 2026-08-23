@@ -1,9 +1,10 @@
 package team.avion.fabric.tasks;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 import team.avion.common.localization.Language;
 import team.avion.fabric.VoiceCraftJava;
+import team.avion.fabric.utils.FabricMinecraftCompat;
 import team.avion.proxy.ProxyPlayerSnapshot;
 
 import java.util.List;
@@ -36,24 +37,26 @@ public final class FabricPositionsTask {
             return;
         }
 
-        List<ProxyPlayerSnapshot> snapshots = server.getPlayerManager().getPlayerList().stream()
+        plugin.getVoiceEndpointRegistry().retryPending();
+
+        List<ProxyPlayerSnapshot> snapshots = server.getPlayerList().getPlayers().stream()
                 .map(this::getPlayerSnapshot)
                 .toList();
         scheduleTick(snapshots);
     }
 
-    private ProxyPlayerSnapshot getPlayerSnapshot(ServerPlayerEntity player) {
+    private ProxyPlayerSnapshot getPlayerSnapshot(ServerPlayer player) {
         return new ProxyPlayerSnapshot(
-                player.getUuid().toString(),
+                player.getUUID().toString(),
                 player.getName().getString(),
-                player.getEntityWorld().getRegistryKey().getValue().toString(),
+                FabricMinecraftCompat.dimensionId(player),
                 player.getX(),
                 player.getEyeY(),
                 player.getZ(),
-                player.getYaw(),
+                player.getYRot(),
                 0.0,
-                player.isSubmergedInWater(),
-                player.isDead());
+                player.isUnderWater(),
+                player.isDeadOrDying());
     }
 
     private void scheduleTick(List<ProxyPlayerSnapshot> snapshots) {

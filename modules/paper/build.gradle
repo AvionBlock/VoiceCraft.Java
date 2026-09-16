@@ -8,6 +8,7 @@ def pluginVersion = project.version.toString()
 dependencies {
     implementation project(':core')
     implementation project(':adapter-api')
+    implementation 'com.tcoded:FoliaLib:0.5.1'
     implementation 'com.google.code.gson:gson:2.13.2'
     compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
     compileOnly 'su.plo.voice.api:server:2.1.15'
@@ -45,6 +46,7 @@ tasks.jar {
 tasks.shadowJar {
     archiveBaseName.set("${rootProject.ext.pluginName}-paper")
     archiveClassifier.set('')
+    relocate 'com.tcoded.folialib', 'team.avion.paper.lib.folialib'
 }
 
 tasks.build {
@@ -62,9 +64,53 @@ tasks.register('verifyPluginMetadata') {
         if (!metadata.contains("version: ${pluginVersion}")) {
             throw new GradleException("Paper plugin.yml version does not match ${pluginVersion}.")
         }
+        if (!metadata.contains('folia-supported: true')) {
+            throw new GradleException('Paper plugin.yml must declare Folia support.')
+        }
+    }
+}
+
+tasks.register('verifyFoliaScheduling') {
+    def javaSources = fileTree('src/main/java') { include '**/*.java' }
+    inputs.files(javaSources)
+
+    doLast {
+        def schedulerSource = file('src/main/java/team/avion/paper/scheduling/PaperScheduler.java')
+        def forbidden = ['getServer().getScheduler()', 'Bukkit.getScheduler()', 'BukkitRunnable', 'BukkitTask']
+        def violations = []
+        javaSources.files.findAll { it != schedulerSource }.each { source ->
+            def text = source.getText('UTF-8')
+            forbidden.findAll(text::contains).each { token ->
+                violations << "${source}: ${token}"
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("Paper code bypasses the Folia scheduler facade:\n${violations.join('\n')}")
+        }
+    }
+}
+
+tasks.register('verifyFoliaPackaging') {
+    dependsOn tasks.shadowJar
+    def shadowArtifact = tasks.named('shadowJar').flatMap { it.archiveFile }
+    inputs.file(shadowArtifact)
+
+    doLast {
+        def entries = zipTree(shadowArtifact.get().asFile).matching {
+            include 'team/avion/paper/lib/folialib/FoliaLib.class'
+            include 'com/tcoded/folialib/**'
+        }.files.collect { it.path.replace('\\', '/') }
+        if (!entries.any { it.endsWith('/team/avion/paper/lib/folialib/FoliaLib.class') }) {
+            throw new GradleException('Relocated FoliaLib is missing from the Paper artifact.')
+        }
+        if (entries.any { it.contains('/com/tcoded/folialib/') }) {
+            throw new GradleException('Unrelocated FoliaLib classes leaked into the Paper artifact.')
+        }
     }
 }
 
 tasks.check {
     dependsOn tasks.verifyPluginMetadata
+    dependsOn tasks.verifyFoliaScheduling
+    dependsOn tasks.verifyFoliaPackaging
 }

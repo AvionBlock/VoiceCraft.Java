@@ -9,6 +9,7 @@ author: lil-jon-crunk
 website: https://java.voicecraft.chat
 
 api-version: "1.20"
+folia-supported: true
 prefix: VoiceCraft.Java
 softdepend: [voicechat, PlasmoVoice]
 

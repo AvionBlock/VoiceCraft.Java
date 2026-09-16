@@ -1,7 +1,5 @@
 package team.avion.paper.tasks;
 
-import org.bukkit.scheduler.BukkitRunnable;
-
 import team.avion.paper.VoiceCraftJava;
 import team.avion.common.localization.Language;
 import team.avion.proxy.ProxyPlayerSnapshot;
@@ -9,79 +7,115 @@ import team.avion.proxy.ProxyPlayerSnapshot;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.Location;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.bukkit.entity.Player;
 import org.bukkit.World;
 import org.bukkit.util.BlockIterator;
 import org.bukkit.util.Vector;
 
-public class PositionsTask extends BukkitRunnable {
+/** Captures player state on each player's owning region and sends immutable snapshots asynchronously. */
+public final class PositionsTask {
     private static final Set<Material> CAVE_MATERIALS = Set.of(
             Material.STONE, Material.DIORITE, Material.GRANITE, Material.DEEPSLATE, Material.TUFF);
 
     private final VoiceCraftJava plugin;
     private final String lang;
     private final AtomicBoolean networkOperationRunning = new AtomicBoolean(false);
-    private final Map<UUID, CaveSample> caveSamples = new HashMap<>();
-    private boolean isConnected = false;
+    private final Map<UUID, CaveSample> caveSamples = new ConcurrentHashMap<>();
+    private final Map<UUID, ProxyPlayerSnapshot> latestSnapshots = new ConcurrentHashMap<>();
+    private final AtomicInteger caveScansRemaining = new AtomicInteger();
+    private volatile boolean isConnected = false;
     private int reconnectRetries = 0;
     private boolean reconnecting = false;
-    private int caveScansRemaining;
+    private volatile boolean stopped;
 
     public PositionsTask(VoiceCraftJava plugin, String lang) {
         this.plugin = plugin;
         this.lang = lang;
     }
 
-    @Override
     public void run() {
+        if (stopped) {
+            return;
+        }
         List<Player> players = List.copyOf(plugin.getServer().getOnlinePlayers());
-        caveSamples.keySet().removeIf(playerId -> players.stream().noneMatch(player -> player.getUniqueId().equals(playerId)));
-        caveScansRemaining = Math.max(1,
-                plugin.getConfig().getInt("config.voice.cave-scans-per-update", 2));
+        caveScansRemaining.set(Math.max(1,
+                plugin.getConfig().getInt("config.voice.cave-scans-per-update", 2)));
 
         if (plugin.usesProxy) {
             isConnected = plugin.isConnected();
             if (!isConnected) {
                 return;
             }
-
-            List<ProxyPlayerSnapshot> snapshots = players.stream().map(this::getPlayerSnapshot).toList();
-            for (int index = 0; index < players.size(); index++) {
-                plugin.getMessageHandler().sendSnapshot(players.get(index), snapshots.get(index));
-            }
-            if (plugin.getSessionManager().isConnected()) {
-                scheduleTick(snapshots);
-            }
-            return;
-        }
-
-        if (reconnecting) {
+        } else if (reconnecting) {
             scheduleReconnect();
             return;
+        } else {
+            isConnected = plugin.isConnected();
+            if (!isConnected) {
+                return;
+            }
         }
 
-        isConnected = plugin.isConnected();
-        if (!isConnected) {
+        capturePlayers(players);
+    }
+
+    public void forgetPlayer(UUID playerId) {
+        caveSamples.remove(playerId);
+        latestSnapshots.remove(playerId);
+    }
+
+    public String worldId(UUID playerId) {
+        ProxyPlayerSnapshot snapshot = latestSnapshots.get(playerId);
+        return snapshot == null ? "" : snapshot.dimensionId();
+    }
+
+    private void capturePlayers(List<Player> players) {
+        if (players.isEmpty()) {
+            finishCapture(List.of());
             return;
         }
 
-        plugin.getVoiceEndpointRegistry().retryPending();
+        List<ProxyPlayerSnapshot> snapshots = java.util.Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger remaining = new AtomicInteger(players.size());
+        for (Player player : players) {
+            plugin.getScheduler().runAtEntity(player, () -> {
+                if (!plugin.usesProxy) {
+                    plugin.getVoiceEndpointRegistry().retryPending(player);
+                }
+                ProxyPlayerSnapshot snapshot = getPlayerSnapshot(player);
+                snapshots.add(snapshot);
+                latestSnapshots.put(player.getUniqueId(), snapshot);
+                if (plugin.usesProxy) {
+                    plugin.getMessageHandler().sendSnapshot(player, snapshot);
+                }
+            }).whenComplete((ignored, throwable) -> {
+                if (throwable != null) {
+                    plugin.Logger.warnLocalized("session.position-update-failed", "$error",
+                            throwable.getMessage());
+                }
+                if (remaining.decrementAndGet() == 0) {
+                    finishCapture(List.copyOf(snapshots));
+                }
+            });
+        }
+    }
 
-        List<ProxyPlayerSnapshot> snapshots = players.stream()
-                .map(this::getPlayerSnapshot)
-                .toList();
-        scheduleTick(snapshots);
+    private void finishCapture(List<ProxyPlayerSnapshot> snapshots) {
+        if (!plugin.usesProxy || plugin.getSessionManager().isConnected()) {
+            scheduleTick(snapshots);
+        }
     }
 
     private void scheduleTick(List<ProxyPlayerSnapshot> snapshots) {
@@ -90,7 +124,7 @@ public class PositionsTask extends BukkitRunnable {
         }
 
         try {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.getScheduler().runAsync(() -> {
                 boolean connected = tickSafely(snapshots);
                 runPluginTask(() -> {
                     networkOperationRunning.set(false);
@@ -111,7 +145,7 @@ public class PositionsTask extends BukkitRunnable {
 
         if (plugin.getConfig().getBoolean("config.auto-reconnect")) {
             if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
-                Bukkit.broadcast(Component.text(Language.getMessage(lang, "plugin-connection-lost-reconnect"))
+                plugin.getScheduler().broadcast(Component.text(Language.getMessage(lang, "plugin-connection-lost-reconnect"))
                         .color(NamedTextColor.RED));
             }
             reconnectRetries = 0;
@@ -119,10 +153,10 @@ public class PositionsTask extends BukkitRunnable {
             scheduleReconnect();
         } else {
             if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
-                Bukkit.broadcast(Component.text(Language.getMessage(lang, "plugin-connection-lost"))
+                plugin.getScheduler().broadcast(Component.text(Language.getMessage(lang, "plugin-connection-lost"))
                         .color(NamedTextColor.RED));
             }
-            cancel();
+            stopped = true;
         }
     }
 
@@ -136,10 +170,9 @@ public class PositionsTask extends BukkitRunnable {
         if (cached != null && now < cached.refreshAfterMillis()) {
             return cached.density();
         }
-        if (caveScansRemaining <= 0) {
+        if (caveScansRemaining.getAndDecrement() <= 0) {
             return cached == null ? 0.0 : cached.density();
         }
-        caveScansRemaining--;
 
         int blockCount = 0;
         for (int x = -1; x <= 1; x++) {
@@ -165,6 +198,9 @@ public class PositionsTask extends BukkitRunnable {
     private int castRayUntilBlock(BlockIterator blockIterator) {
         while (blockIterator.hasNext()) {
             Block block = blockIterator.next();
+            if (!plugin.getScheduler().owns(block)) {
+                break;
+            }
             if (block.getType().isSolid()) {
                 if (CAVE_MATERIALS.contains(block.getType())) {
                     return 1;
@@ -209,10 +245,10 @@ public class PositionsTask extends BukkitRunnable {
             reconnecting = false;
             plugin.Logger.error(Language.getMessage(lang, "plugin-connection-reconnecting-failed"));
             if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
-                Bukkit.broadcast(Component.text(Language.getMessage(lang, "plugin-connection-reconnecting-failed"))
+                plugin.getScheduler().broadcast(Component.text(Language.getMessage(lang, "plugin-connection-reconnecting-failed"))
                         .color(NamedTextColor.RED));
             }
-            cancel();
+            stopped = true;
             return;
         }
 
@@ -221,7 +257,7 @@ public class PositionsTask extends BukkitRunnable {
                 Integer.toString(reconnectRetries)));
 
         try {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.getScheduler().runAsync(() -> {
                 boolean connected = reconnectSafely();
                 runPluginTask(() -> {
                     networkOperationRunning.set(false);
@@ -230,7 +266,7 @@ public class PositionsTask extends BukkitRunnable {
                         isConnected = true;
                         plugin.Logger.warn(Language.getMessage(lang, "plugin-connection-reconnecting-success"));
                         if (plugin.getConfig().getBoolean("config.voice.send-connection-lost-message")) {
-                            Bukkit.broadcast(Component.text(Language.getMessage(lang,
+                            plugin.getScheduler().broadcast(Component.text(Language.getMessage(lang,
                                     "plugin-connection-reconnecting-success")).color(NamedTextColor.GREEN));
                         }
                     } else {
@@ -249,7 +285,7 @@ public class PositionsTask extends BukkitRunnable {
             return;
         }
         try {
-            plugin.getServer().getScheduler().runTask(plugin, task);
+            plugin.getScheduler().runGlobal(task);
         } catch (org.bukkit.plugin.IllegalPluginAccessException ignored) {
             networkOperationRunning.set(false);
         }

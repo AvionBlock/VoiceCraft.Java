@@ -146,7 +146,7 @@ public class VoiceCraftProcessManager {
             return;
         }
         try {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.getScheduler().runAsync(() -> {
                 if (!closed && !plugin.usesProxy
                         && plugin.getConfig().getBoolean("config.auto-reconnect", true)) {
                     try {
@@ -302,7 +302,7 @@ public class VoiceCraftProcessManager {
             return new LaunchTarget(absoluteExecutablePath.getParent(),
                     absoluteExecutablePath.toString(), List.of());
         }
-        String releaseId = VoiceCraftRuntimeDefaults.GITLAB_BASE_URL + "|" + VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH
+        String releaseId = VoiceCraftRuntimeDefaults.GITHUB_BASE_URL + "|" + VoiceCraftRuntimeDefaults.GITHUB_REPOSITORY
                 + "|" + releaseAsset.tagName() + "|" + VoiceCraftProtocol.VERSION_STRING + "|" + releaseAsset.name();
 
         if (!Files.exists(executablePath) || !releaseId.equals(readReleaseMarker(releaseMarker))) {
@@ -339,10 +339,11 @@ public class VoiceCraftProcessManager {
 
     private VoiceCraftReleaseResolver.ReleaseAsset resolveReleaseAsset(String platform, String architecture)
             throws IOException, InterruptedException {
-        String apiUrl = VoiceCraftReleaseResolver.buildReleaseApiUrl(VoiceCraftRuntimeDefaults.GITLAB_BASE_URL,
-                VoiceCraftRuntimeDefaults.GITLAB_PROJECT_PATH, VoiceCraftRuntimeDefaults.RELEASE);
+        String apiUrl = VoiceCraftReleaseResolver.buildReleaseApiUrl(VoiceCraftRuntimeDefaults.GITHUB_BASE_URL,
+                VoiceCraftRuntimeDefaults.GITHUB_REPOSITORY, VoiceCraftRuntimeDefaults.RELEASE);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(apiUrl))
+                .header("User-Agent", "VoiceCraft.Java")
                 .timeout(Duration.ofSeconds(30))
                 .GET()
                 .build();
@@ -375,6 +376,7 @@ public class VoiceCraftProcessManager {
         plugin.Logger.infoLocalized("runtime.downloading", "$asset", releaseAsset.name());
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(downloadUrl))
+                .header("User-Agent", "VoiceCraft.Java")
                 .timeout(Duration.ofSeconds(30))
                 .GET()
                 .build();

@@ -16,8 +16,8 @@ ext {
     // Individual Minecraft targets override their toolchain when the game requires Java 21/25.
     javaTarget = JavaVersion.VERSION_17
     voiceCraft = [
-        gitlabBaseUrl      : 'https://gitlab.avion.team',
-        gitlabProjectPath  : 'voicecraft/VoiceCraft',
+        githubBaseUrl      : 'https://api.github.com',
+        githubRepository   : 'AvionBlock/VoiceCraft',
         release            : 'latest',
         installDirectory   : 'voicecraft-runtime',
         executableBaseName : 'VoiceCraft.Server',
@@ -48,6 +48,10 @@ allprojects {
         maven {
             name = "PlasmoVerse"
             url = uri("https://repo.plasmoverse.com/releases")
+        }
+        maven {
+            name = "TechnicallyCoded"
+            url = uri("https://repo.tcoded.com/releases")
         }
     }
 }

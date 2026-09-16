@@ -10,7 +10,6 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.scheduler.BukkitTask;
 import team.avion.adapter.VoiceActivityState;
 import team.avion.adapter.VoiceCraftAudioSink;
 import team.avion.adapter.VoiceCraftEntityIdentity;
@@ -18,9 +17,8 @@ import team.avion.adapter.VoiceCraftIdentityListener;
 import team.avion.adapter.VoiceCraftPlayerState;
 import team.avion.adapter.VoiceCraftPlayerStateListener;
 import team.avion.paper.VoiceCraftJava;
+import team.avion.paper.scheduling.PaperScheduler.Task;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -39,13 +37,13 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
     private static final String OVERLAY_TAG = "voicecraft-status-overlay";
 
     private final VoiceCraftJava plugin;
-    private final Map<UUID, Hologram> hologramsByTargetId = new HashMap<>();
+    private final Map<UUID, Hologram> hologramsByTargetId = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> entityIdsByPlayerId = new ConcurrentHashMap<>();
     private final Map<Integer, Long> speakingUntilByEntityId = new ConcurrentHashMap<>();
     private final Set<UUID> modVoicePlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> capabilityKnownAfterByPlayerId = new ConcurrentHashMap<>();
 
-    private BukkitTask task;
+    private Task task;
     private boolean running;
     private boolean enabled;
     private int updateIntervalTicks;
@@ -185,7 +183,7 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
             task = null;
         }
         if (enabled && running && plugin.isEnabled()) {
-            task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick,
+            task = plugin.getScheduler().runGlobalTimer(this::tick,
                     1L, updateIntervalTicks);
         }
     }
@@ -196,61 +194,61 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
         }
         List<Player> onlinePlayers = List.copyOf(plugin.getServer().getOnlinePlayers());
         long now = System.currentTimeMillis();
-        Set<UUID> eligiblePlayerIds = new HashSet<>();
-        for (Player player : onlinePlayers) {
-            capabilityKnownAfterByPlayerId.putIfAbsent(player.getUniqueId(), now + handshakeGraceMillis);
-            if (isVanillaClient(player, now)) {
-                eligiblePlayerIds.add(player.getUniqueId());
-            }
-        }
-
+        Set<UUID> onlineIds = onlinePlayers.stream().map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet());
         for (UUID targetId : List.copyOf(hologramsByTargetId.keySet())) {
-            Player target = plugin.getServer().getPlayer(targetId);
-            if (target == null || !target.isOnline() || !eligiblePlayerIds.contains(targetId)) {
+            if (!onlineIds.contains(targetId)) {
                 removeHologram(targetId);
             }
         }
 
         for (Player target : onlinePlayers) {
-            if (!eligiblePlayerIds.contains(target.getUniqueId())) {
-                continue;
-            }
-            updateTarget(target, onlinePlayers, eligiblePlayerIds, now);
+            plugin.getScheduler().runAtEntity(target, () -> updateTarget(target, onlinePlayers, now));
         }
     }
 
-    private void updateTarget(Player target, List<Player> viewers, Set<UUID> eligiblePlayerIds, long now) {
+    private void updateTarget(Player target, List<Player> viewers, long now) {
+        capabilityKnownAfterByPlayerId.putIfAbsent(target.getUniqueId(), now + handshakeGraceMillis);
+        if (!isVanillaClient(target, now)) {
+            removeHologram(target.getUniqueId());
+            return;
+        }
+
         PlayerVoiceStatus status = statusFor(target, now);
         StatusStyle style = styles.get(status);
         Hologram hologram = hologramsByTargetId.get(target.getUniqueId());
-        if (hologram == null || hologram.armorStand().isDead()
-                || !hologram.armorStand().getWorld().equals(target.getWorld())) {
+        String targetWorld = target.getWorld().getKey().toString();
+        if (hologram == null || !hologram.worldId().equals(targetWorld)) {
             removeHologram(target.getUniqueId());
-            hologram = spawnHologram(target, status, style);
+            hologram = spawnHologram(target, status, style, targetWorld);
             hologramsByTargetId.put(target.getUniqueId(), hologram);
         }
 
         if (hologram.status() != status) {
-            hologram.armorStand().customName(style.component());
-            hologram.armorStand().setCustomNameVisible(!style.symbol().isBlank());
+            Hologram current = hologram;
+            plugin.getScheduler().runAtEntity(current.armorStand(), () -> {
+                current.armorStand().customName(style.component());
+                current.armorStand().setCustomNameVisible(!style.symbol().isBlank());
+            });
             hologram.status(status);
         }
         Location targetLocation = target.getLocation();
         Location desiredLocation = targetLocation.clone().add(0D, heightOffset, 0D);
-        if (hologram.armorStand().getLocation().distanceSquared(desiredLocation) > 0.0004D) {
-            hologram.armorStand().teleport(desiredLocation);
-        }
+        plugin.getScheduler().teleport(hologram.armorStand(), desiredLocation);
 
         for (Player viewer : viewers) {
-            boolean shouldSee = !viewer.getUniqueId().equals(target.getUniqueId())
-                    && eligiblePlayerIds.contains(viewer.getUniqueId())
-                    && viewer.getWorld().equals(target.getWorld())
-                    && viewer.getLocation().distanceSquared(targetLocation) <= viewDistanceSquared;
-            setVisible(viewer, hologram, shouldSee);
+            Hologram current = hologram;
+            UUID targetId = target.getUniqueId();
+            plugin.getScheduler().runAtEntity(viewer, () -> {
+                boolean shouldSee = !viewer.getUniqueId().equals(targetId)
+                        && isVanillaClient(viewer, now)
+                        && viewer.getWorld().getKey().toString().equals(targetWorld)
+                        && viewer.getLocation().distanceSquared(targetLocation) <= viewDistanceSquared;
+                setVisible(viewer, current, shouldSee);
+            });
         }
     }
 
-    private Hologram spawnHologram(Player target, PlayerVoiceStatus status, StatusStyle style) {
+    private Hologram spawnHologram(Player target, PlayerVoiceStatus status, StatusStyle style, String worldId) {
         ArmorStand armorStand = target.getWorld().spawn(hologramLocation(target), ArmorStand.class, stand -> {
             stand.setVisibleByDefault(false);
             stand.setVisible(false);
@@ -266,7 +264,7 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
             stand.customName(style.component());
             stand.setCustomNameVisible(!style.symbol().isBlank());
         });
-        return new Hologram(armorStand, status, new HashSet<>());
+        return new Hologram(armorStand, worldId, status, ConcurrentHashMap.newKeySet());
     }
 
     private void setVisible(Player viewer, Hologram hologram, boolean visible) {
@@ -334,8 +332,8 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
 
     private void removeHologram(UUID targetId) {
         Hologram hologram = hologramsByTargetId.remove(targetId);
-        if (hologram != null && !hologram.armorStand().isDead()) {
-            hologram.armorStand().remove();
+        if (hologram != null) {
+            plugin.getScheduler().runAtEntity(hologram.armorStand(), hologram.armorStand()::remove);
         }
     }
 
@@ -350,17 +348,23 @@ public final class PlayerVoiceStatusOverlay implements Listener, VoiceCraftAudio
 
     private static final class Hologram {
         private final ArmorStand armorStand;
+        private final String worldId;
         private final Set<UUID> visibleTo;
         private PlayerVoiceStatus status;
 
-        private Hologram(ArmorStand armorStand, PlayerVoiceStatus status, Set<UUID> visibleTo) {
+        private Hologram(ArmorStand armorStand, String worldId, PlayerVoiceStatus status, Set<UUID> visibleTo) {
             this.armorStand = armorStand;
+            this.worldId = worldId;
             this.status = status;
             this.visibleTo = visibleTo;
         }
 
         private ArmorStand armorStand() {
             return armorStand;
+        }
+
+        private String worldId() {
+            return worldId;
         }
 
         private PlayerVoiceStatus status() {

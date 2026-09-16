@@ -55,6 +55,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /** Native Plasmo Voice add-on bridge. Plasmo owns transport; VoiceCraft owns server-side routing. */
 @Addon(id = "voicecraft-java", name = "VoiceCraft.Java Bridge", version = "2.0.0", authors = {"lil-jon-crunk"})
@@ -167,12 +168,9 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
             return;
         }
         UUID playerId = event.getConnection().getPlayer().getInstance().getUuid();
-        runMain(() -> {
-            Player player = plugin.getServer().getPlayer(playerId);
-            if (player != null) {
-                plugin.getVoiceEndpointRegistry().connect(id(), player);
-                sendProjectedPlayersTo((VoiceServerPlayer) event.getConnection().getPlayer());
-            }
+        runForPlayer(playerId, player -> {
+            plugin.getVoiceEndpointRegistry().connect(id(), player);
+            sendProjectedPlayersTo((VoiceServerPlayer) event.getConnection().getPlayer());
         });
     }
 
@@ -184,11 +182,14 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         if (audioEnds.cancel(playerId)) {
             audioDebug.recordEnd("plasmo-in", "cancelled");
         }
-        runMain(() -> {
-            Player player = plugin.getServer().getPlayer(playerId);
-            plugin.getVoiceEndpointRegistry().disconnect(id(), playerId,
-                    player == null ? playerId.toString() : player.getName());
-        });
+        Player player = plugin.getScheduler().player(playerId);
+        if (player == null) {
+            runMain(() -> plugin.getVoiceEndpointRegistry().disconnect(
+                    id(), playerId, plugin.getVoiceEndpointRegistry().playerName(playerId)));
+        } else {
+            plugin.getScheduler().runAtEntity(player, () -> plugin.getVoiceEndpointRegistry().disconnect(
+                    id(), playerId, player.getName()));
+        }
     }
 
     private void onUdpPacketReceived(UdpPacketReceivedEvent event) {
@@ -201,9 +202,8 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
             event.setCancelled(true);
             return;
         }
-        Player player = plugin.getServer().getPlayer(playerId);
-        OptionalInt entityId = player == null ? OptionalInt.empty()
-                : plugin.getSessionManager().getBoundEntityId(player.getName());
+        OptionalInt entityId = plugin.getSessionManager().getBoundEntityId(
+                plugin.getVoiceEndpointRegistry().playerName(playerId));
         if (entityId.isEmpty() || packet.getData() == null || packet.getData().length == 0) {
             event.setCancelled(true);
             return;
@@ -348,11 +348,11 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
                             : line.createEntitySource(player.getInstance(), source.stereo()))
                     .orElse(null);
             case ENTITY -> {
-                Player player = source.minecraftEntityId() == null ? null
-                        : plugin.getServer().getPlayer(source.minecraftEntityId());
-                yield player == null ? createStaticSource(line, source)
-                        : line.createEntitySource(voiceServer.getMinecraftServer().getEntityByInstance(player),
-                                source.stereo());
+                Optional<VoiceServerPlayer> player = source.minecraftEntityId() == null
+                        ? Optional.empty() : voiceServer.getPlayerManager().getPlayerById(source.minecraftEntityId());
+                yield player.<ServerAudioSource<?>>map(value ->
+                                line.createEntitySource(value.getInstance(), source.stereo()))
+                        .orElseGet(() -> createStaticSource(line, source));
             }
             case POSITION -> createStaticSource(line, source);
             case DIRECT -> audience.playerIds().stream().findFirst()
@@ -372,12 +372,10 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
     }
 
     private ServerAudioSource<?> createStaticSource(ServerSourceLine line, VoiceAudioSource source) {
-        Player carrier = plugin.getServer().getOnlinePlayers().stream()
-                .filter(player -> player.getWorld().getKey().toString().equals(source.worldId())).findFirst().orElse(null);
-        if (carrier == null) {
+        var world = voiceServer.getMinecraftServer().getWorld(source.worldId());
+        if (world == null) {
             return null;
         }
-        var world = voiceServer.getMinecraftServer().getWorld(carrier.getWorld());
         return line.createStaticSource(new ServerPos3d(world, source.x(), source.y(), source.z()), source.stereo());
     }
 
@@ -385,9 +383,8 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         String category = source.getLine().getName();
         if (source instanceof ServerPlayerSource playerSource) {
             UUID playerId = playerSource.getPlayer().getInstance().getUuid();
-            Player player = plugin.getServer().getPlayer(playerId);
-            OptionalInt entityId = player == null ? OptionalInt.empty()
-                    : plugin.getSessionManager().getBoundEntityId(player.getName());
+            OptionalInt entityId = plugin.getSessionManager().getBoundEntityId(
+                    plugin.getVoiceEndpointRegistry().playerName(playerId));
             if (entityId.isPresent()) {
                 return new VoiceAudioSource(source.getId(), VoiceAudioSourceType.PLAYER, entityId.getAsInt(), playerId,
                         playerId, "", 0D, 0D, 0D, distance, category, isStereo(source));
@@ -561,20 +558,18 @@ public final class PaperPlasmoVoiceBridge implements VoiceAdapter, VoiceCraftAud
         }
         voiceServer.getUdpConnectionManager().getConnections().forEach(connection -> {
             UUID playerId = connection.getPlayer().getInstance().getUuid();
-            runMain(() -> {
-                Player player = plugin.getServer().getPlayer(playerId);
-                if (player != null) {
-                    plugin.getVoiceEndpointRegistry().connect(id(), player);
-                }
-            });
+            runForPlayer(playerId, player -> plugin.getVoiceEndpointRegistry().connect(id(), player));
         });
     }
 
     private void runMain(Runnable task) {
-        if (plugin.getServer().isPrimaryThread()) {
-            task.run();
-        } else {
-            plugin.getServer().getScheduler().runTask(plugin, task);
+        plugin.getScheduler().runGlobal(task);
+    }
+
+    private void runForPlayer(UUID playerId, Consumer<Player> action) {
+        Player player = plugin.getScheduler().player(playerId);
+        if (player != null) {
+            plugin.getScheduler().runAtEntity(player, () -> action.accept(player));
         }
     }
 }

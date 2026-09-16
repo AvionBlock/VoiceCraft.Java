@@ -14,10 +14,21 @@ final class VoiceCraftReleaseResolver {
     private VoiceCraftReleaseResolver() {
     }
 
-    static String buildReleaseApiUrl(String baseUrl, String projectPath, String release) {
+    static String buildReleaseApiUrl(String baseUrl, String repository, String release) {
         String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        if (normalizedBaseUrl.contains("github.com")) {
+            String apiHost = normalizedBaseUrl.contains("api.github.com") ? normalizedBaseUrl : "https://api.github.com";
+            String releasePath;
+            if ("latest".equalsIgnoreCase(release)) {
+                releasePath = "latest";
+            } else {
+                releasePath = "tags/" + encodePathSegment(release);
+            }
+            return apiHost + "/repos/" + repository + "/releases/" + releasePath;
+        }
+
         String releasePath = "latest".equalsIgnoreCase(release) ? "permalink/latest" : encodePathSegment(release);
-        return normalizedBaseUrl + "/api/v4/projects/" + encodePathSegment(projectPath)
+        return normalizedBaseUrl + "/api/v4/projects/" + encodePathSegment(repository)
                 + "/releases/" + releasePath;
     }
 
@@ -28,24 +39,37 @@ final class VoiceCraftReleaseResolver {
         }
         JsonObject release = releaseJson.getAsJsonObject();
         String tagName = requiredString(release, "tag_name");
-        JsonObject assets = release.has("assets") && release.get("assets").isJsonObject()
-                ? release.getAsJsonObject("assets") : null;
-        JsonArray links = assets != null && assets.has("links") && assets.get("links").isJsonArray()
-                ? assets.getAsJsonArray("links") : null;
-        if (links == null) {
+
+        JsonArray assetElements = null;
+        if (release.has("assets")) {
+            JsonElement assetsElement = release.get("assets");
+            if (assetsElement.isJsonArray()) {
+                assetElements = assetsElement.getAsJsonArray();
+            } else if (assetsElement.isJsonObject()) {
+                JsonObject assetsObj = assetsElement.getAsJsonObject();
+                if (assetsObj.has("links") && assetsObj.get("links").isJsonArray()) {
+                    assetElements = assetsObj.getAsJsonArray("links");
+                }
+            }
+        }
+
+        if (assetElements == null) {
             throw new IOException("VoiceCraft release " + tagName + " has no asset links");
         }
 
         String assetPrefix = VoiceCraftRuntimeDefaults.EXECUTABLE_BASE_NAME + "."
                 + capitalize(platform) + "." + architecture;
         ReleaseAsset versionedMatch = null;
-        for (JsonElement linkElement : links) {
+        for (JsonElement linkElement : assetElements) {
             if (!linkElement.isJsonObject()) {
                 continue;
             }
             JsonObject link = linkElement.getAsJsonObject();
             String name = optionalString(link, "name");
-            String url = optionalString(link, "url");
+            String url = optionalString(link, "browser_download_url");
+            if (url == null) {
+                url = optionalString(link, "url");
+            }
             if (name == null || url == null) {
                 continue;
             }

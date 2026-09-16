@@ -103,15 +103,15 @@ public final class PaperVoiceEndpointRegistry {
         listeners.remove(listener);
     }
 
-    public void retryPending() {
-        pendingTransports.forEach((playerId, waiting) -> {
-            Player player = plugin.getServer().getPlayer(playerId);
-            if (player == null || !player.isOnline()) {
-                pendingTransports.remove(playerId, waiting);
-                return;
-            }
+    public void retryPending(Player player) {
+        Set<String> waiting = pendingTransports.get(player.getUniqueId());
+        if (waiting != null) {
             List.copyOf(waiting).forEach(transport -> connect(transport, player));
-        });
+        }
+    }
+
+    public String playerName(UUID playerId) {
+        return playerNames.getOrDefault(playerId, playerId.toString());
     }
 
     public boolean isPrimary(UUID playerId, String transportId) {

@@ -4,11 +4,9 @@ import lombok.Getter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 import team.avion.common.BaseVoiceCraftJava;
 import team.avion.common.config.ConfigTemplateWriter;
@@ -22,6 +20,8 @@ import team.avion.paper.adapters.simplevoicechat.PaperSimpleVoiceChatBridge;
 import team.avion.paper.commands.VoiceCommand;
 import team.avion.paper.dependencies.ManagedVoiceDependencyInstaller;
 import team.avion.paper.listeners.*;
+import team.avion.paper.scheduling.PaperScheduler;
+import team.avion.paper.scheduling.PaperScheduler.Task;
 import team.avion.paper.tasks.PositionsTask;
 import team.avion.paper.utils.*;
 import team.avion.paper.voicecraft.PaperVoiceCraftSessionManager;
@@ -89,10 +89,11 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     private VoiceAdapter plasmoVoiceAdapter;
     private VoiceAdapter simpleVoiceChatAdapter;
     private @Getter PaperVoiceEndpointRegistry voiceEndpointRegistry;
+    private @Getter PaperScheduler scheduler;
     private Object plasmoAddon;
     private volatile boolean reloadInProgress;
 
-    private BukkitTask taskRunner;
+    private Task taskRunner;
 
     public PaperLogger Logger = new PaperLogger();
 
@@ -119,6 +120,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
     @Override
     public void onEnable() {
         instance = this;
+        scheduler = new PaperScheduler(this);
         ensureLocalizedConfigExists();
         reloadConfig();
         if (!migrateConfigIfNeeded()) {
@@ -136,7 +138,8 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         }
 
         lang = resolveConfiguredLanguage();
-        int positionTaskInterval = getConfig().getInt("config.voice.position-update-interval-ticks", 1);
+        int positionTaskInterval = Math.max(1,
+                getConfig().getInt("config.voice.position-update-interval-ticks", 1));
 
         getServer().getMessenger().registerOutgoingPluginChannel(this, ProxyMessageCodec.CHANNEL_NAME);
         getServer().getMessenger().registerIncomingPluginChannel(this, ProxyMessageCodec.CHANNEL_NAME, messageHandler);
@@ -145,7 +148,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         getCommand("voice").setExecutor(voiceCommand);
         getCommand("voice").setTabCompleter(voiceCommand);
         positionsTask = new PositionsTask(this, lang);
-        taskRunner = positionsTask.runTaskTimer(this, 1, positionTaskInterval);
+        taskRunner = scheduler.runGlobalTimer(positionsTask::run, 1, positionTaskInterval);
         getServer().getPluginManager().registerEvents(new PlayerQuitHandler(this, lang), this);
         voiceStatusOverlay.start();
 
@@ -175,6 +178,9 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         }
         if (voiceCraftProcessManager != null) {
             voiceCraftProcessManager.shutdown();
+        }
+        if (scheduler != null) {
+            scheduler.shutdown();
         }
         getServer().getMessenger().unregisterOutgoingPluginChannel(this);
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
@@ -252,11 +258,12 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             token = "";
         }
 
-        int positionTaskInterval = getConfig().getInt("config.voice.position-update-interval-ticks", 1);
+        int positionTaskInterval = Math.max(1,
+                getConfig().getInt("config.voice.position-update-interval-ticks", 1));
         if (!taskRunner.isCancelled())
             taskRunner.cancel();
         positionsTask = new PositionsTask(this, lang);
-        taskRunner = positionsTask.runTaskTimer(this, 1, positionTaskInterval);
+        taskRunner = scheduler.runGlobalTimer(positionsTask::run, 1, positionTaskInterval);
         if (voiceStatusOverlay != null) {
             voiceStatusOverlay.reload();
         }
@@ -356,7 +363,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
         boolean sendVoipDisconnectMessage = getConfig().getBoolean("config.voice.send-voicecraft-disconnect-message");
         if (sendVoipDisconnectMessage) {
-            Bukkit.broadcast(Component.text(disconnectMessage).color(NamedTextColor.YELLOW));
+            scheduler.broadcast(Component.text(disconnectMessage).color(NamedTextColor.YELLOW));
         }
     }
 
@@ -677,7 +684,7 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
             return;
         }
         try {
-            getServer().getScheduler().runTask(this, () -> {
+            scheduler.runGlobal(() -> {
                 if (!isEnabled() || !isConnected) {
                     return;
                 }

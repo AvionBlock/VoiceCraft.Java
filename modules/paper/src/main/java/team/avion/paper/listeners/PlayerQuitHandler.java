@@ -20,6 +20,9 @@ public class PlayerQuitHandler implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        if (plugin.getPositionsTask() != null) {
+            plugin.getPositionsTask().forgetPlayer(player.getUniqueId());
+        }
         boolean isBound = plugin.getPlayerBinds().getOrDefault(player.getName(), false);
 
         if (isBound) {

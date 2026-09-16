@@ -47,6 +47,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /** Native Simple Voice Chat API bridge. SVC owns transport; VoiceCraft owns server-side routing. */
 public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraftAudioSink, VoicechatPlugin,
@@ -163,12 +164,7 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
             return;
         }
         UUID playerId = event.getConnection().getPlayer().getUuid();
-        runMain(() -> {
-            Player player = plugin.getServer().getPlayer(playerId);
-            if (player != null) {
-                plugin.getVoiceEndpointRegistry().connect(id(), player);
-            }
-        });
+        runForPlayer(playerId, player -> plugin.getVoiceEndpointRegistry().connect(id(), player));
     }
 
     private void onPlayerDisconnected(PlayerDisconnectedEvent event) {
@@ -182,11 +178,14 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
         }
         fallbackSequences.remove(playerId);
         outputSequences.remove(playerId);
-        runMain(() -> {
-            Player player = plugin.getServer().getPlayer(playerId);
-            plugin.getVoiceEndpointRegistry().disconnect(id(), playerId,
-                    player == null ? playerId.toString() : player.getName());
-        });
+        Player player = plugin.getScheduler().player(playerId);
+        if (player == null) {
+            runMain(() -> plugin.getVoiceEndpointRegistry().disconnect(
+                    id(), playerId, plugin.getVoiceEndpointRegistry().playerName(playerId)));
+        } else {
+            plugin.getScheduler().runAtEntity(player, () -> plugin.getVoiceEndpointRegistry().disconnect(
+                    id(), playerId, player.getName()));
+        }
     }
 
     private void onPlayerStateChanged(PlayerStateChangedEvent event) {
@@ -262,8 +261,8 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
         }
         LocationalSoundPacket packet = event.getPacket();
         UUID receiver = receiverId(event.getReceiverConnection());
-        Player receiverPlayer = plugin.getServer().getPlayer(receiver);
-        String world = receiverPlayer == null ? "" : receiverPlayer.getWorld().getKey().toString();
+        String world = receiver == null || plugin.getPositionsTask() == null
+                ? "" : plugin.getPositionsTask().worldId(receiver);
         VoiceAudioSource source = new VoiceAudioSource(packet.getChannelId(), VoiceAudioSourceType.POSITION, 0,
                 null, null, world, packet.getPosition().getX(), packet.getPosition().getY(), packet.getPosition().getZ(),
                 packet.getDistance(), packet.getCategory(), false);
@@ -312,13 +311,14 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
                 outputFrame.opusFrame().length);
         injecting.set(true);
         try {
-            for (Player player : plugin.getServer().getOnlinePlayers()) {
-                if (!plugin.getVoiceEndpointRegistry().isPrimary(player.getUniqueId(), id())
-                        || !frame.audience().allows(player.getUniqueId())
-                        || frame.source().playerIdentity().map(player.getUniqueId()::equals).orElse(false)) {
+            for (VoiceEndpointState endpoint : plugin.getVoiceEndpointRegistry().states()) {
+                UUID playerId = endpoint.playerId();
+                if (!plugin.getVoiceEndpointRegistry().isPrimary(playerId, id())
+                        || !frame.audience().allows(playerId)
+                        || frame.source().playerIdentity().map(playerId::equals).orElse(false)) {
                     continue;
                 }
-                VoicechatConnection connection = api.getConnectionOf(player.getUniqueId());
+                VoicechatConnection connection = api.getConnectionOf(playerId);
                 if (connection == null || !connection.isConnected() || connection.isDisabled()) {
                     continue;
                 }
@@ -326,7 +326,7 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
                     sendFrameTo(api, connection, outputFrame);
                 } catch (RuntimeException exception) {
                     plugin.Logger.warn("Failed to deliver bridged audio to Simple Voice Chat player "
-                            + player.getName() + ": " + exception.getMessage());
+                            + endpoint.playerName() + ": " + exception.getMessage());
                 }
             }
         } finally {
@@ -354,12 +354,13 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
                         VoiceAudioSource.player(entityId, identity.playerId(),
                                 (float) plugin.getConfig().getDouble("config.voice.proximity-distance", 30D)),
                         VoiceAudioAudience.PROXIMITY, outputSequence, (int) outputSequence, 0F, new byte[0]);
-                for (Player player : plugin.getServer().getOnlinePlayers()) {
-                    if (!plugin.getVoiceEndpointRegistry().isPrimary(player.getUniqueId(), id())
-                            || player.getUniqueId().equals(identity.playerId())) {
+                for (VoiceEndpointState endpoint : plugin.getVoiceEndpointRegistry().states()) {
+                    UUID playerId = endpoint.playerId();
+                    if (!plugin.getVoiceEndpointRegistry().isPrimary(playerId, id())
+                            || playerId.equals(identity.playerId())) {
                         continue;
                     }
-                    VoicechatConnection connection = api.getConnectionOf(player.getUniqueId());
+                    VoicechatConnection connection = api.getConnectionOf(playerId);
                     if (connection != null && connection.isConnected() && !connection.isDisabled()) {
                         sendFrameTo(api, connection, end);
                     }
@@ -481,6 +482,14 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
     }
 
     private VoiceAudioSource entitySource(EntitySoundPacket packet) {
+        VoiceEndpointState endpoint = plugin.getVoiceEndpointRegistry().state(packet.getEntityUuid());
+        if (endpoint != null) {
+            return VoiceAudioSource.player(endpoint.voiceCraftEntityId(), endpoint.playerId(), packet.getDistance());
+        }
+        if (plugin.getScheduler().isFolia()) {
+            return new VoiceAudioSource(packet.getChannelId(), VoiceAudioSourceType.ENTITY, 0, null,
+                    packet.getEntityUuid(), "", 0D, 0D, 0D, packet.getDistance(), packet.getCategory(), false);
+        }
         Entity entity = findEntity(packet.getEntityUuid());
         if (entity instanceof Player player) {
             OptionalInt entityId = plugin.getSessionManager().getBoundEntityId(player.getName());
@@ -510,12 +519,13 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
         if (api == null) {
             return;
         }
-        plugin.getServer().getOnlinePlayers().forEach(player -> {
-            VoicechatConnection connection = api.getConnectionOf(player.getUniqueId());
-            if (connection != null && connection.isConnected()) {
-                plugin.getVoiceEndpointRegistry().connect(id(), player);
-            }
-        });
+        plugin.getServer().getOnlinePlayers().forEach(player ->
+                plugin.getScheduler().runAtEntity(player, () -> {
+                    VoicechatConnection connection = api.getConnectionOf(player.getUniqueId());
+                    if (connection != null && connection.isConnected()) {
+                        plugin.getVoiceEndpointRegistry().connect(id(), player);
+                    }
+                }));
     }
 
     private UUID receiverId(VoicechatConnection connection) {
@@ -523,15 +533,17 @@ public final class PaperSimpleVoiceChatBridge implements VoiceAdapter, VoiceCraf
     }
 
     private String playerName(UUID playerId) {
-        Player player = plugin.getServer().getPlayer(playerId);
-        return player == null ? playerId.toString() : player.getName();
+        return plugin.getVoiceEndpointRegistry().playerName(playerId);
     }
 
     private void runMain(Runnable task) {
-        if (plugin.getServer().isPrimaryThread()) {
-            task.run();
-        } else {
-            plugin.getServer().getScheduler().runTask(plugin, task);
+        plugin.getScheduler().runGlobal(task);
+    }
+
+    private void runForPlayer(UUID playerId, Consumer<Player> action) {
+        Player player = plugin.getScheduler().player(playerId);
+        if (player != null) {
+            plugin.getScheduler().runAtEntity(player, () -> action.accept(player));
         }
     }
 }

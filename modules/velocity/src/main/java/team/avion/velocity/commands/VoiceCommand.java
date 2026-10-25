@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
+import com.velocitypowered.api.permission.Tristate;
 import com.velocitypowered.api.proxy.Player;
 
 import net.kyori.adventure.text.Component;
@@ -32,7 +33,7 @@ public final class VoiceCommand implements SimpleCommand {
         String[] args = invocation.arguments();
 
         voiceCommand.onCommand(args, plugin.isConnected(), sender instanceof Player,
-                permission -> !(sender instanceof Player) || sender.hasPermission(permission),
+                permission -> allowed(sender, permission),
                 new DoubleStringOperation() {
                     @Override
                     public void execute(String text, String rawColor) {
@@ -63,7 +64,7 @@ public final class VoiceCommand implements SimpleCommand {
 
     @Override
     public boolean hasPermission(Invocation invocation) {
-        return invocation.source().hasPermission("voice.cmd");
+        return allowed(invocation.source(), "voice.cmd");
     }
 
     @Override
@@ -71,8 +72,18 @@ public final class VoiceCommand implements SimpleCommand {
         return voiceCommand.onTabComplete(invocation.arguments(), new StringOperation() {
             @Override
             public boolean execute(String permission) {
-                return invocation.source().hasPermission(permission);
+                return allowed(invocation.source(), permission);
             }
         });
+    }
+
+    private static boolean allowed(CommandSource sender, String permission) {
+        if (!(sender instanceof Player)) {
+            return true;
+        }
+        if ("voice.cmd".equals(permission) || "voice.bind".equals(permission)) {
+            return sender.getPermissionValue(permission) != Tristate.FALSE;
+        }
+        return sender.hasPermission(permission);
     }
 }

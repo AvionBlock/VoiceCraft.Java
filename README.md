@@ -134,7 +134,7 @@ The project is currently built against:
 ## Installation
 
 1. Download or build the jar for your platform.
-2. Put it into the server's `plugins` directory.
+2. Put it into `plugins/` on Paper or a proxy, or `mods/` on a Fabric server.
 3. Start the server once to generate `config.yml`.
 4. Configure the VoiceCraft connection and the required adapters. If an upstream voice mod is unavailable for this exact target, VoiceCraft.Java logs a warning and keeps the available adapters running.
 5. Restart the server or run `/voice reload`.

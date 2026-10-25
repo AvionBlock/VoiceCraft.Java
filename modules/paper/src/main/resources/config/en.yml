@@ -7,6 +7,7 @@ config:
 
   proxy:
     enabled: false               # Enable when this Paper server is behind Velocity/Bungee
+    server-name: ""              # Must match the server name in Velocity when enabled
 
   adapters:
     client-priority: ["simple-voice-chat", "plasmo"] # Preferred client when a player has both mods

@@ -10,6 +10,7 @@ import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 
 import team.avion.proxy.ProxyMessageCodec;
+import team.avion.proxy.ProxyDimensionIds;
 import team.avion.proxy.ProxyPlayerSnapshot;
 import team.avion.velocity.VoiceCraftJava;
 
@@ -66,7 +67,8 @@ public class PluginMessageHandler {
             String type = ProxyMessageCodec.peekType(data);
             if (ProxyMessageCodec.SNAPSHOT.equals(type)) {
                 ProxyPlayerSnapshot snapshot = ProxyMessageCodec.decodeSnapshot(data);
-                plugin.getSessionManager().updatePlayerSnapshot(snapshot.withDimensionId(serverName + "_" + snapshot.dimensionId()));
+                plugin.getSessionManager().updatePlayerSnapshot(snapshot.withDimensionId(
+                        ProxyDimensionIds.qualify(serverName, snapshot.dimensionId())));
             } else if (ProxyMessageCodec.BIND_REQUEST.equals(type)) {
                 ProxyMessageCodec.BindRequest bindRequest = ProxyMessageCodec.decodeBindRequest(data);
                 boolean bound = plugin.handleProxyBindRequest(bindRequest.bindingKey(), bindRequest.playerId(), bindRequest.playerName());

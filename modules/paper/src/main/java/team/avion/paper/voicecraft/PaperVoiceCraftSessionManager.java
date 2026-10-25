@@ -239,7 +239,9 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                     boundEntitiesByPlayerName.put(player.getName(), new BoundEntity(player.getName(), created.Id,
                             player.getUniqueId().toString(), player.getUniqueId().toString(), "java",
                             getDimensionId(player), getCurrentEffectBitmask(), false));
-                    plugin.getPlayerBinds().put(player.getName(), true);
+                    if (!plugin.usesProxy) {
+                        plugin.getPlayerBinds().put(player.getName(), true);
+                    }
                     return OptionalInt.of(created.Id);
                 }
 
@@ -271,12 +273,16 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     public synchronized void destroyEntityForPlayer(String playerName) {
         BoundEntity boundEntity = boundEntitiesByPlayerName.remove(playerName);
         if (boundEntity == null) {
-            plugin.getPlayerBinds().remove(playerName);
+            if (!plugin.usesProxy) {
+                plugin.getPlayerBinds().remove(playerName);
+            }
             return;
         }
 
         unregisterEntityIdentity(boundEntity.entityId());
-        plugin.getPlayerBinds().remove(playerName);
+        if (!plugin.usesProxy) {
+            plugin.getPlayerBinds().remove(playerName);
+        }
         if (!client.isConnected()) {
             return;
         }
@@ -332,7 +338,8 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
                     source.category().isBlank() ? "Voice add-on" : source.category()));
             packets.add(stringPacket(new SetEntityDescriptionRequestPacket(), entityId,
                     "Bridged from " + originAdapter));
-            packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), entityId, source.worldId()));
+            packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), entityId,
+                    plugin.qualifyWorldId(source.worldId())));
             packets.add(intPacket(new SetEntityEffectBitmaskRequestPacket(), entityId,
                     source.type() == VoiceAudioSourceType.DIRECT || source.type() == VoiceAudioSourceType.BROADCAST
                             ? 0 : getCurrentEffectBitmask()));
@@ -556,12 +563,16 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
     public synchronized boolean unbindPlayer(Player player) {
         BoundEntity boundEntity = boundEntitiesByPlayerName.remove(player.getName());
         if (boundEntity == null) {
-            plugin.getPlayerBinds().remove(player.getName());
+            if (!plugin.usesProxy) {
+                plugin.getPlayerBinds().remove(player.getName());
+            }
             return false;
         }
 
         unregisterEntityIdentity(boundEntity.entityId());
-        plugin.getPlayerBinds().remove(player.getName());
+        if (!plugin.usesProxy) {
+            plugin.getPlayerBinds().remove(player.getName());
+        }
         if (!client.isConnected()) {
             return false;
         }
@@ -797,7 +808,9 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
         if (removed != null) {
             boundEntitiesByPlayerName.remove(removed.playerName());
-            plugin.getPlayerBinds().remove(removed.playerName());
+            if (!plugin.usesProxy) {
+                plugin.getPlayerBinds().remove(removed.playerName());
+            }
         }
         unregisterEntityIdentity(entityId);
     }
@@ -908,12 +921,13 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
 
     private String getDimensionId(Player player) {
         String worldName = player.getWorld().getName();
-        return switch (worldName) {
+        String dimensionId = switch (worldName) {
             case "world" -> "minecraft:overworld";
             case "world_nether" -> "minecraft:nether";
             case "world_the_end" -> "minecraft:the_end";
             default -> worldName;
         };
+        return plugin.qualifyWorldId(dimensionId);
     }
 
     private void clearSessionState() {
@@ -926,7 +940,9 @@ public final class PaperVoiceCraftSessionManager implements VoiceCraftAudioBridg
         nativeVoiceStatesByEntityId.clear();
         virtualEntitiesByStreamId.clear();
         identities.forEach(this::notifyIdentityUnregistered);
-        plugin.getPlayerBinds().clear();
+        if (!plugin.usesProxy) {
+            plugin.getPlayerBinds().clear();
+        }
     }
 
     private void destroyManagedEntities() {

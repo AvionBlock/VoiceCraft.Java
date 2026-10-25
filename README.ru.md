@@ -98,12 +98,12 @@ Paper-плагин владеет подключением к VoiceCraft. Он �
 ### Proxy Mode
 
 ```text
-Paper backends -> Velocity/BungeeCord -> VoiceCraft
+Paper и Fabric 26.3 backends -> Velocity -> VoiceCraft
 ```
 
 Используйте для сетей с несколькими backend-серверами.
 
-Установите VoiceCraft.Java на каждый Paper backend и на proxy. Proxy владеет подключением к VoiceCraft, а Paper backends отправляют player snapshots и bind/unbind requests через plugin channel `voicecraft-java:main`.
+Установите VoiceCraft.Java на каждый Paper или Fabric 26.3 backend и на прокси. На backends включите `config.proxy.enabled: true`. Velocity управляет позициями и привязками игроков; backends передают данные через канал `voicecraft-java:main`. Для нативного аудио SVC и Plasmo каждый backend также открывает вспомогательное подключение к VoiceCraft. У VoiceCraft Server значение `McTcpConfig.MaxClients` должно быть не меньше числа backends плюс один для прокси.
 
 Simple Voice Chat и Plasmo Voice используют собственную официальную настройку proxy/network. VoiceCraft.Java больше не открывает сырые UDP relay-порты на Velocity или BungeeCord.
 
@@ -171,7 +171,7 @@ config:
 
 Установите `auto-start: true`, если Paper-плагин должен управлять VoiceCraft. Установите `false`, если запускаете VoiceCraft самостоятельно. Управляемый launcher запускает `VoiceCraft.Server` с включенным McTcp и передает настроенные transport host, transport port, login token и VoiceCraft voice port как runtime options.
 
-### Paper Backend за Proxy
+### Paper или Fabric 26.3 Backend за Proxy
 
 ```yaml
 config:
@@ -179,7 +179,7 @@ config:
     enabled: true
 ```
 
-В backend mode Paper не подключается к VoiceCraft напрямую. Он пересылает состояние Minecraft-игроков на Velocity или BungeeCord.
+В backend mode Paper или Fabric 26.3 пересылает состояние Minecraft-игроков на Velocity. Отдельное вспомогательное MC API подключение передаёт нативное аудио SVC и Plasmo, но не управляет привязкой игроков.
 
 ### Velocity или BungeeCord
 

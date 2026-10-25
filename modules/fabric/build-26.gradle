@@ -9,7 +9,7 @@ description = 'Fabric adapter for unobfuscated Minecraft 26.x.'
 def targetCatalog = new JsonSlurper().parse(rootProject.file('gradle/voice-targets.json'))
 def globalTargetName = providers.gradleProperty('voiceTarget').orNull
 def requestedTargetName = providers.gradleProperty('fabricTarget').orNull ?:
-        (targetCatalog.any { it.name == globalTargetName && it.loader == 'fabric' } ? globalTargetName : '26.2-fabric')
+        (targetCatalog.any { it.name == globalTargetName && it.loader == 'fabric' } ? globalTargetName : '26.3-fabric')
 def selectedTarget = targetCatalog.find { it.name == requestedTargetName }
 if (selectedTarget == null || selectedTarget.loader != 'fabric' || !requestedTargetName.startsWith('26.')) {
     throw new GradleException("Unknown Minecraft 26.x Fabric target '${requestedTargetName}'.")
@@ -24,6 +24,9 @@ java {
 }
 
 sourceSets.main.java.srcDir(rootProject.file('modules/mod-runtime/src/main/java'))
+if (minecraftVersion == '26.3') {
+    sourceSets.main.java.srcDir(rootProject.file('modules/fabric/src/26.3/java'))
+}
 
 configurations {
     shade

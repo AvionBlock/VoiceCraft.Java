@@ -114,7 +114,10 @@ public final class PositionsTask {
 
     private void finishCapture(List<ProxyPlayerSnapshot> snapshots) {
         if (!plugin.usesProxy || plugin.getSessionManager().isConnected()) {
-            scheduleTick(snapshots);
+            scheduleTick(plugin.usesProxy
+                    ? snapshots.stream().map(snapshot -> snapshot.withDimensionId(
+                            plugin.qualifyWorldId(snapshot.dimensionId()))).toList()
+                    : snapshots);
         }
     }
 

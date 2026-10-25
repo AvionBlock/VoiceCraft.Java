@@ -14,9 +14,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class FabricPositionsTask {
     private final VoiceCraftJava plugin;
     private final AtomicBoolean networkOperationRunning = new AtomicBoolean(false);
+    private final AtomicBoolean auxiliaryReconnectRunning = new AtomicBoolean(false);
     private int ticksUntilUpdate;
     private boolean reconnecting;
     private int reconnectRetries;
+    private int ticksUntilAuxiliaryReconnect;
 
     public FabricPositionsTask(VoiceCraftJava plugin) {
         this.plugin = plugin;
@@ -29,7 +31,7 @@ public final class FabricPositionsTask {
         }
         ticksUntilUpdate = 0;
 
-        if (reconnecting) {
+        if (reconnecting && !plugin.usesProxy()) {
             scheduleReconnect();
             return;
         }
@@ -37,12 +39,37 @@ public final class FabricPositionsTask {
             return;
         }
 
-        plugin.getVoiceEndpointRegistry().retryPending();
+        if (plugin.getSessionManager().isConnected()) {
+            plugin.getVoiceEndpointRegistry().retryPending();
+        }
 
-        List<ProxyPlayerSnapshot> snapshots = server.getPlayerList().getPlayers().stream()
-                .map(this::getPlayerSnapshot)
-                .toList();
-        scheduleTick(snapshots);
+        List<ServerPlayer> players = List.copyOf(server.getPlayerList().getPlayers());
+        List<ProxyPlayerSnapshot> snapshots = players.stream().map(this::getPlayerSnapshot).toList();
+        if (plugin.usesProxy()) {
+            for (int i = 0; i < players.size(); i++) {
+                plugin.getProxyBridge().sendSnapshot(players.get(i), snapshots.get(i));
+            }
+            if (!plugin.getSessionManager().isConnected()) {
+                if (++ticksUntilAuxiliaryReconnect >= 40
+                        && auxiliaryReconnectRunning.compareAndSet(false, true)) {
+                    ticksUntilAuxiliaryReconnect = 0;
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            if (!plugin.getSessionManager().isConnected()) {
+                                plugin.getSessionManager().connect();
+                            }
+                        } finally {
+                            auxiliaryReconnectRunning.set(false);
+                        }
+                    });
+                }
+                return;
+            }
+        }
+        scheduleTick(plugin.usesProxy()
+                ? snapshots.stream().map(snapshot -> snapshot.withDimensionId(
+                        plugin.qualifyWorldId(snapshot.dimensionId()))).toList()
+                : snapshots);
     }
 
     private ProxyPlayerSnapshot getPlayerSnapshot(ServerPlayer player) {
@@ -65,7 +92,7 @@ public final class FabricPositionsTask {
         }
         CompletableFuture.supplyAsync(() -> tickSafely(snapshots)).whenComplete((connected, throwable) -> {
             networkOperationRunning.set(false);
-            if ((throwable != null || !connected) && plugin.isConnected()) {
+            if ((throwable != null || !connected) && plugin.isConnected() && !plugin.usesProxy()) {
                 handleConnectionLost();
             }
         });

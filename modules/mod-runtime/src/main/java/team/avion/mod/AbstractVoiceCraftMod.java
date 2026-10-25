@@ -14,6 +14,7 @@ import team.avion.fabric.utils.FabricLogger;
 import team.avion.fabric.voicecraft.FabricVoiceCraftProcessManager;
 import team.avion.fabric.voicecraft.FabricVoiceCraftSessionManager;
 import team.avion.fabric.voicecraft.FabricVoiceEndpointRegistry;
+import team.avion.proxy.ProxyDimensionIds;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,6 +41,8 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
     public final FabricLogger Logger;
 
     private volatile boolean connected;
+    private volatile boolean proxyMode;
+    private ModProxyBridge proxyBridge;
     private volatile String host = "";
     private volatile int port;
     private volatile String loginToken = "";
@@ -78,6 +81,7 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
         }
         voiceCraftProcessManager = createProcessManager();
         positionsTask = createPositionsTask();
+        proxyBridge = createProxyBridge();
     }
 
     protected abstract boolean isModLoaded(String modId);
@@ -91,6 +95,10 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
     protected abstract FabricVoiceCraftProcessManager createProcessManager();
 
     protected abstract FabricPositionsTask createPositionsTask();
+
+    protected ModProxyBridge createProxyBridge() {
+        return null;
+    }
 
     protected final void serverStarted(MinecraftServer server) {
         this.server = server;
@@ -131,6 +139,28 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
         return targetCapabilities;
     }
 
+    public final boolean usesProxy() {
+        return proxyMode;
+    }
+
+    public final ModProxyBridge getProxyBridge() {
+        return proxyBridge;
+    }
+
+    public final String qualifyWorldId(String dimensionId) {
+        return proxyMode
+                ? ProxyDimensionIds.qualify(config.getString("config.proxy.server-name", ""), dimensionId)
+                : dimensionId;
+    }
+
+    public final void syncPlayerBind(String playerName, boolean bound) {
+        boolean previous = playerBinds.getOrDefault(playerName, false);
+        playerBinds.put(playerName, bound);
+        if (previous != bound) {
+            Logger.infoLocalized(bound ? "voicechat.joined" : "voicechat.left", "$player", playerName);
+        }
+    }
+
     @Override
     public final void reload() {
         reloadInProgress = true;
@@ -144,9 +174,22 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
             String newHost = getTransportHost();
             int newPort = getTransportPort();
             String newLoginToken = getTransportLoginToken();
+            boolean requestedProxyMode = config.getBoolean("config.proxy.enabled", false);
+            String proxyServerName = config.getString("config.proxy.server-name", "");
+            boolean newProxyMode = requestedProxyMode && proxyBridge != null && !proxyServerName.isBlank();
+            if (requestedProxyMode && !newProxyMode) {
+                Logger.error("Proxy mode requires a supported Fabric target and config.proxy.server-name matching Velocity.");
+                if (sessionManager.isConnected()) {
+                    sessionManager.disconnect();
+                }
+                connected = false;
+                token = "";
+                return;
+            }
             boolean connectionChanged = !Objects.equals(host, newHost)
                     || port != newPort
-                    || !Objects.equals(loginToken, newLoginToken);
+                    || !Objects.equals(loginToken, newLoginToken)
+                    || proxyMode != newProxyMode;
             if (sessionManager.isConnected() && connectionChanged) {
                 sessionManager.disconnect();
                 connected = false;
@@ -156,6 +199,7 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
             host = newHost;
             port = newPort;
             loginToken = newLoginToken;
+            proxyMode = newProxyMode;
             int proximityDistance = config.getInt("config.voice.proximity-distance", 30);
             boolean proximityToggle = config.getBoolean("config.voice.proximity-toggle", true);
             boolean voiceEffects = config.getBoolean("config.voice.voice-effects", true);
@@ -165,7 +209,13 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
                 voiceCraftProcessManager.ensureRunning();
             }
 
-            if (!connectionChanged && sessionManager.isConnected()) {
+            if (proxyMode) {
+                if (!sessionManager.isConnected() && !sessionManager.connect()) {
+                    Logger.warn("Proxy mode is active, but the auxiliary native audio connection is unavailable.");
+                }
+                connected = true;
+                token = "proxy";
+            } else if (!connectionChanged && sessionManager.isConnected()) {
                 connected = true;
                 token = sessionManager.getSessionToken();
                 sessionManager.updateSettings(proximityDistance, proximityToggle, voiceEffects);
@@ -206,6 +256,14 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
         if (connected) {
             disconnect("Reconnecting to another server.");
         }
+        if (proxyMode) {
+            if (!sessionManager.isConnected() && !sessionManager.connect()) {
+                Logger.warn("Proxy mode reconnected; the auxiliary native audio connection is still unavailable.");
+            }
+            connected = true;
+            token = "proxy";
+            return true;
+        }
         if (host != null && loginToken != null) {
             sessionManager.configure(host, port, loginToken, config.getInt("config.voice.proximity-distance", 30),
                     config.getBoolean("config.voice.proximity-toggle", true),
@@ -237,6 +295,7 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
         }
         connected = false;
         token = "";
+        playerBinds.clear();
         Logger.info(Language.getMessage(lang, "plugin-connection-disconnect").replace("$reason", reason));
     }
 
@@ -252,6 +311,9 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
         if (playerBinds.getOrDefault(player.getName().getString(), false)) {
             return true;
         }
+        if (proxyMode) {
+            return proxyBridge.sendBindRequest(player, playerKey);
+        }
         boolean bound = sessionManager.bindPlayer(playerKey, player);
         if (!bound && !sessionManager.isConnected()) {
             connected = reconnect(true);
@@ -263,6 +325,10 @@ public abstract class AbstractVoiceCraftMod implements BaseVoiceCraftJava {
     @Override
     public final Boolean bindFake(int bindKey, String name, int tries) {
         if (!connected) {
+            return false;
+        }
+        if (proxyMode) {
+            Logger.warn("BindFake is unavailable on a proxied backend; run it on the proxy.");
             return false;
         }
         boolean bound = sessionManager.bindFakePlayer(bindKey, name);

@@ -29,6 +29,7 @@ import team.avion.paper.voicecraft.PaperVoiceEndpointRegistry;
 import team.avion.paper.voicecraft.PlayerVoiceStatusOverlay;
 import team.avion.paper.voicecraft.VoiceCraftProcessManager;
 import team.avion.proxy.ProxyMessageCodec;
+import team.avion.proxy.ProxyDimensionIds;
 
 import java.io.File;
 import java.io.IOException;
@@ -212,6 +213,11 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
         synchronizeNativeVoiceConfigs(true);
 
         boolean newUsesProxy = getConfig().getBoolean("config.proxy.enabled", false);
+        if (newUsesProxy && getConfig().getString("config.proxy.server-name", "").isBlank()) {
+            Logger.error("config.proxy.server-name must match the server name in Velocity.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         String newHost = getTransportHost();
         int newPort = getTransportPort();
         String newLoginToken = getTransportLoginToken();
@@ -575,6 +581,12 @@ public class VoiceCraftJava extends JavaPlugin implements BaseVoiceCraftJava {
 
     public int getManagedVoicePort() {
         return getConfig().getInt(MANAGED_VOICE_PORT_PATH, 9050);
+    }
+
+    public String qualifyWorldId(String dimensionId) {
+        return usesProxy
+                ? ProxyDimensionIds.qualify(getConfig().getString("config.proxy.server-name", ""), dimensionId)
+                : dimensionId;
     }
 
     private void synchronizeNativeVoiceConfigs(boolean runtimeReload) {

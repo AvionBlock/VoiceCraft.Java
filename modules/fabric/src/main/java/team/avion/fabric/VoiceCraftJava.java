@@ -14,6 +14,7 @@ import team.avion.fabric.voicecraft.FabricVoiceEndpointRegistry;
 import team.avion.mod.AbstractVoiceCraftMod;
 import team.avion.mod.ManagedModDependencyInstaller;
 import team.avion.mod.ModCommandRegistrar;
+import team.avion.mod.ModProxyBridge;
 
 import java.nio.file.Path;
 
@@ -74,5 +75,18 @@ public final class VoiceCraftJava extends AbstractVoiceCraftMod implements ModIn
     @Override
     protected FabricPositionsTask createPositionsTask() {
         return new FabricPositionsTask(this);
+    }
+
+    @Override
+    protected ModProxyBridge createProxyBridge() {
+        try {
+            return (ModProxyBridge) Class.forName("team.avion.fabric.proxy.FabricProxyBridge")
+                    .getConstructor(VoiceCraftJava.class).newInstance(this);
+        } catch (ClassNotFoundException exception) {
+            return null; // Older Minecraft targets do not include the proxy channel yet.
+        } catch (ReflectiveOperationException exception) {
+            Logger.error("Failed to initialize Fabric proxy channel: " + exception.getMessage());
+            return null;
+        }
     }
 }

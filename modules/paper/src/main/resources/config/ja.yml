@@ -7,6 +7,7 @@ config:
 
   proxy:
     enabled: false # この Paper サーバーが Velocity/Bungee 配下なら有効化します
+    server-name: "" # Velocity のサーバー名と一致させてください
 
   adapters:
     client-priority: ["simple-voice-chat", "plasmo"]

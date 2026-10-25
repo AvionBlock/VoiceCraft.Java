@@ -216,7 +216,9 @@ public final class FabricVoiceCraftSessionManager implements VoiceCraftAudioBrid
                     boundEntitiesByPlayerName.put(player.getName().getString(), new BoundEntity(
                             player.getName().getString(), created.Id, getDimensionId(player), getCurrentEffectBitmask(),
                             false));
-                    plugin.getPlayerBinds().put(player.getName().getString(), true);
+                    if (!plugin.usesProxy()) {
+                        plugin.getPlayerBinds().put(player.getName().getString(), true);
+                    }
                     return OptionalInt.of(created.Id);
                 }
                 continue;
@@ -290,7 +292,8 @@ public final class FabricVoiceCraftSessionManager implements VoiceCraftAudioBrid
                 packets.add(stringPacket(new SetEntityNameRequestPacket(), created.Id,
                         source.category().isBlank() ? "Voice add-on" : source.category()));
                 packets.add(stringPacket(new SetEntityDescriptionRequestPacket(), created.Id, "Bridged from " + origin));
-                packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), created.Id, source.worldId()));
+                packets.add(stringPacket(new SetEntityWorldIdRequestPacket(), created.Id,
+                        plugin.qualifyWorldId(source.worldId())));
                 packets.add(intPacket(new SetEntityEffectBitmaskRequestPacket(), created.Id,
                         source.type() == VoiceAudioSourceType.DIRECT || source.type() == VoiceAudioSourceType.BROADCAST
                                 ? 0 : getCurrentEffectBitmask()));
@@ -390,7 +393,9 @@ public final class FabricVoiceCraftSessionManager implements VoiceCraftAudioBrid
 
     public synchronized void unbindPlayer(ServerPlayer player) {
         BoundEntity boundEntity = boundEntitiesByPlayerName.remove(player.getName().getString());
-        plugin.getPlayerBinds().remove(player.getName().getString());
+        if (!plugin.usesProxy()) {
+            plugin.getPlayerBinds().remove(player.getName().getString());
+        }
         if (boundEntity == null || !client.isConnected()) {
             return;
         }
@@ -582,7 +587,9 @@ public final class FabricVoiceCraftSessionManager implements VoiceCraftAudioBrid
         boundEntitiesByPlayerName.values().removeIf(bound -> {
             boolean remove = bound.entityId() == entityId;
             if (remove) {
-                plugin.getPlayerBinds().remove(bound.playerName());
+                if (!plugin.usesProxy()) {
+                    plugin.getPlayerBinds().remove(bound.playerName());
+                }
             }
             return remove;
         });
@@ -620,7 +627,9 @@ public final class FabricVoiceCraftSessionManager implements VoiceCraftAudioBrid
         boundEntitiesByPlayerName.clear();
         routedFrameMetadata.clear();
         virtualEntitiesByStreamId.clear();
-        plugin.getPlayerBinds().clear();
+        if (!plugin.usesProxy()) {
+            plugin.getPlayerBinds().clear();
+        }
     }
 
     private void destroyManagedEntities() {
@@ -654,7 +663,7 @@ public final class FabricVoiceCraftSessionManager implements VoiceCraftAudioBrid
     }
 
     private String getDimensionId(ServerPlayer player) {
-        return FabricMinecraftCompat.dimensionId(player);
+        return plugin.qualifyWorldId(FabricMinecraftCompat.dimensionId(player));
     }
 
     private static SetEntityNameRequestPacket stringPacket(SetEntityNameRequestPacket packet, int entityId, String value) {

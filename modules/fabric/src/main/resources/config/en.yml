@@ -5,6 +5,10 @@ config:
   lang: "system"
   auto-reconnect: true
 
+  proxy:
+    enabled: false               # Enable when this Fabric server is behind Velocity/Bungee
+    server-name: ""              # Must match the server name in Velocity when enabled
+
   adapters:
     client-priority: ["simple-voice-chat", "plasmo"]
     managed-dependencies:

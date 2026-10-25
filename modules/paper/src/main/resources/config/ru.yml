@@ -7,6 +7,7 @@ config:
 
   proxy:
     enabled: false # Включить, если этот Paper-сервер стоит за Velocity/Bungee
+    server-name: "" # Должно совпадать с именем сервера в конфиге Velocity
 
   adapters:
     client-priority: ["simple-voice-chat", "plasmo"] # Приоритет клиента, если у игрока установлены оба мода

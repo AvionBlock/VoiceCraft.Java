@@ -360,5 +360,18 @@
     "plasmoVoice": true,
     "neoforge": "26.2.0.0-beta",
     "minecraftDependency": "[26.2,26.3)"
+  },
+  {
+    "name": "26.3-fabric",
+    "minecraft": "26.3",
+    "loader": "fabric",
+    "java": 25,
+    "compat": "26.3",
+    "simpleVoiceChat": true,
+    "plasmoVoice": true,
+    "fabricLoader": "0.19.5",
+    "fabricApi": "0.161.0+26.3",
+    "fabricPermissions": "0.7.0",
+    "minecraftDependency": "26.3.x"
   }
 ]

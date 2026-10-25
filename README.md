@@ -98,12 +98,12 @@ The Paper plugin owns the VoiceCraft connection. It can either connect to an exi
 ### Proxy Mode
 
 ```text
-Paper backends -> Velocity/BungeeCord -> VoiceCraft
+Paper and Fabric 26.3 backends -> Velocity -> VoiceCraft
 ```
 
 Use this for networks with multiple backend servers.
 
-Install VoiceCraft.Java on every Paper backend and on the proxy. The proxy owns the VoiceCraft connection, while Paper backends send player snapshots and bind/unbind requests through the `voicecraft-java:main` plugin channel.
+Install VoiceCraft.Java on every Paper or Fabric 26.3 backend and on the proxy. Set `config.proxy.enabled: true` on each backend. Velocity owns player positions and binds, while backends send snapshots and bind requests through the `voicecraft-java:main` plugin channel. Each backend also opens an auxiliary VoiceCraft MC API connection for its native SVC and Plasmo audio bridges. The VoiceCraft Server must allow at least one MC API client per backend plus the proxy (`McTcpConfig.MaxClients`).
 
 Simple Voice Chat and Plasmo Voice keep using their own official proxy/network setup. VoiceCraft.Java no longer exposes raw UDP relays on Velocity or BungeeCord.
 
@@ -112,7 +112,7 @@ Simple Voice Chat and Plasmo Voice keep using their own official proxy/network s
 | Platform | Role |
 | --- | --- |
 | Paper | Direct/backend runtime, managed VoiceCraft Server process, native SVC and Plasmo bridges |
-| Fabric 1.20.1+ | Server runtime, managed VoiceCraft Server process, native SVC and Plasmo mod bridges |
+| Fabric 1.20.1+ | Server runtime, managed VoiceCraft Server process, native SVC and Plasmo mod bridges; Velocity backend mode on 26.3 |
 | Forge 1.20.1+ | Server runtime with native SVC and/or Plasmo bridges where upstream provides them |
 | NeoForge 1.21.1+ | Server runtime with native SVC and/or Plasmo bridges where upstream provides them |
 | Velocity | Proxy runtime and central VoiceCraft connection |
@@ -176,7 +176,7 @@ config:
 
 Set `auto-start: true` if the Paper plugin should manage VoiceCraft for you. Set it to `false` when running VoiceCraft yourself. The managed launcher starts `VoiceCraft.Server` with McTcp enabled and passes the configured transport host, transport port, login token, and VoiceCraft voice port as runtime options.
 
-### Paper Backend Behind Proxy
+### Paper or Fabric 26.3 Backend Behind Proxy
 
 ```yaml
 config:
@@ -184,7 +184,7 @@ config:
     enabled: true
 ```
 
-In backend mode, Paper does not connect to VoiceCraft directly. It forwards Minecraft player state to Velocity or BungeeCord.
+In backend mode, Paper or Fabric 26.3 forwards Minecraft player state to Velocity. A separate auxiliary MC API connection carries native SVC and Plasmo audio; it does not own player binds.
 
 ### Velocity or BungeeCord
 
